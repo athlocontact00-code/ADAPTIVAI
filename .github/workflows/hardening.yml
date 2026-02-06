@@ -1,0 +1,30 @@
+# Manual workflow for pre-launch hardening checks.
+# Run from Actions tab when needed. Requires HARDENING_USER_ID secret.
+name: Hardening Checks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run hardening checks
+        run: npm run hardening:checks
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HARDENING_USER_ID: ${{ secrets.HARDENING_USER_ID }}

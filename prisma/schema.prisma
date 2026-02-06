@@ -1,0 +1,1215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS (Spec v1.0)
+// Note: SQLite stores these as strings; Prisma validates at app layer
+// ============================================
+
+// Pre-training AI decision (Spec v1.0 §1)
+enum PreTrainingDecision {
+  PROCEED
+  REDUCE_INTENSITY
+  SHORTEN
+  SWAP_RECOVERY
+  REST
+}
+
+// Muscle soreness levels (Spec v1.0 §1.2)
+enum MuscleSoreness {
+  NONE
+  MILD
+  MODERATE
+  SEVERE
+}
+
+// Plan rigidity preference (Spec v1.0 §5)
+enum PlanRigidity {
+  LOCKED_TODAY
+  LOCKED_1_DAY
+  LOCKED_2_DAYS
+  LOCKED_3_DAYS
+  FLEXIBLE_WEEK
+}
+
+// AI Coach tone preference (Spec v1.0 §6.3)
+enum AITonePreference {
+  SUPPORTIVE
+  DIRECT
+  COACH
+}
+
+// AI Memory layers (Spec v1.0 §4.1)
+enum MemoryLayer {
+  SHORT_TERM
+  MID_TERM
+  LONG_TERM
+}
+
+// AI Warning types (Spec v1.0 §7)
+enum WarningType {
+  BURNOUT_RISK
+  OVERTRAINING
+  LOAD_SPIKE
+  RECOVERY_DEFICIT
+  COMPLIANCE_DROP
+}
+
+// Warning severity levels
+enum WarningSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Perceived difficulty for post-workout feedback
+enum PerceivedDifficulty {
+  EASY
+  OK
+  HARD
+  BRUTAL
+}
+
+// Felt vs planned comparison
+enum FeltVsPlanned {
+  EASIER
+  SAME
+  HARDER
+}
+
+// Diary visibility levels (Spec v1.0 §3.1)
+enum DiaryVisibility {
+  FULL_AI_ACCESS
+  METRICS_ONLY
+  HIDDEN
+}
+
+// AI Memory types (Spec v1.0 §4)
+enum MemoryType {
+  PSYCHOLOGICAL
+  FATIGUE_RESPONSE
+  PREFERENCE
+  COMMUNICATION
+  OVERRIDE_PATTERN
+  LANGUAGE_PATTERN
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  name           String?
+  image          String?
+  role           String    @default("ATHLETE") // ATHLETE | COACH
+  onboardingDone Boolean   @default(false)
+  explainLevel   String    @default("standard") // minimal | standard | deep
+  identityMode   String    @default("competitive") // competitive | longevity | comeback | busy_pro
+  tonePreference AITonePreference @default(SUPPORTIVE)
+  lastCoachCommentSeenAt DateTime?
+  stripeCustomerId String?  @unique
+  trialStartedAt DateTime? // App-level trial start (set on registration)
+  trialEndsAt    DateTime? // App-level trial end (trialStartedAt + TRIAL_DAYS)
+  onboardingDismissedAt DateTime? // Skip onboarding but show "Finish setup" banner
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  profile            Profile?
+  notifications      Notification[]
+  weeklyDigests      WeeklyDigest[]
+  todayDecisions     TodayDecision[]
+  benchmarks         PerformanceBenchmarks?
+  workouts           Workout[]
+  diaryEntries       DiaryEntry[]
+  metricDaily        MetricDaily[]
+  planGenerationLogs PlanGenerationLog[]
+  dailyInsights      DailyInsight[]
+  seasons            Season[]
+  trainingBlocks     TrainingBlock[]
+  raceEvents         RaceEvent[]
+  personalBests      PersonalBest[]
+  injuryEvents       InjuryEvent[]
+  generatedReports   GeneratedReport[]
+  simulationScenarios SimulationScenario[]
+  simulationResults   SimulationResult[]
+  coachLinksAsCoach    CoachAthleteLink[] @relation("CoachLinks")
+  coachLinksAsAthlete  CoachAthleteLink[] @relation("AthleteLinks")
+  coachCommentsAuthored CoachComment[] @relation("CommentAuthor")
+  coachCommentsReceived CoachComment[] @relation("CommentAthlete")
+  auditLogsOwned       AuditLog[] @relation("AuditOwner")
+  auditLogsActed       AuditLog[] @relation("AuditActor")
+  preTrainingCheckIns  PreTrainingCheckIn[]
+  postWorkoutFeedback  PostWorkoutFeedback[]
+  feedbackAggregations FeedbackAggregation[]
+  journalInsights      JournalInsight[]
+  dailyCheckIns        DailyCheckIn[]
+  planChangeProposals  PlanChangeProposal[]
+  coachSuggestions     CoachSuggestion[]
+  aiMemories           AIMemory[]
+  aiMemoryAudits       AIMemoryAudit[]
+  aiWarnings           AIWarning[]
+  analyticsEvents      AnalyticsEvent[]
+  subscriptions       Subscription[]
+  
+  @@map("users")
+}
+
+model PerformanceBenchmarks {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Swim (seconds)
+  swimCssSecPer100    Int?
+  swim400TimeSec      Int?
+  swim100TimeSec      Int?
+  swim200TimeSec      Int?
+  swim1500TimeSec     Int?
+
+  // Run (seconds)
+  run5kTimeSec        Int?
+  run10kTimeSec       Int?
+  runThresholdSecPerKm Int?
+  runHmTimeSec        Int?
+  runMarathonTimeSec  Int?
+
+  // Bike (watts) - FTP in Profile; best 20min optional
+  bikeBest20minWatts  Int?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([userId])
+  @@map("performance_benchmarks")
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan                 String   @default("pro")
+  status               String   @default("incomplete")
+  stripeCustomerId     String
+  stripeSubscriptionId String   @unique
+  stripePriceId        String?
+  stripeProductId      String?
+
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean  @default(false)
+  canceledAt           DateTime?
+  endedAt              DateTime?
+  trialEnd             DateTime?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model StripeEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  livemode      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  processedAt   DateTime?
+
+  @@index([type])
+  @@map("stripe_events")
+}
+
+enum NotificationType {
+  WORKOUT_TODAY_CHECKIN
+  LOW_READINESS_HARD_DAY
+  DIDNT_LOG_YESTERDAY
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  DISMISSED
+}
+
+model Notification {
+  id         String             @id @default(cuid())
+  userId     String
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  title      String
+  body       String
+  data       String?            // JSON: workoutId, date, etc.
+  status     NotificationStatus @default(UNREAD)
+  createdAt  DateTime           @default(now())
+  readAt     DateTime?
+  dismissedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("notifications")
+}
+
+model WeeklyDigest {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart  DateTime
+  weekEnd    DateTime
+  subject    String?
+  html       String?
+  text       String?
+  data       String?  // JSON: summary bullets, metrics
+  createdAt  DateTime @default(now())
+  sentAt     DateTime?
+  status     String   @default("created") // created | sent | failed
+
+  @@index([userId])
+  @@map("weekly_digests")
+}
+
+model TodayDecision {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime // decision date (YYYY-MM-DD)
+  payload   String   // JSON: decision, action, why, confidence
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("today_decisions")
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  birthDate       DateTime?
+  weight          Float?
+  height          Float?
+  restingHR       Int?
+  maxHR           Int?
+  ftp             Int?
+  weeklyHoursGoal Float?
+  sportPrimary    String?
+  experienceLevel String?
+
+  equipmentNotes    String?
+  terrainNotes      String?
+  availabilityNotes String?
+  swimPoolLengthM   Int?
+
+  zone1Min Int?
+  zone1Max Int?
+  zone2Min Int?
+  zone2Max Int?
+  zone3Min Int?
+  zone3Max Int?
+  zone4Min Int?
+  zone4Max Int?
+  zone5Min Int?
+  zone5Max Int?
+
+  // Plan rigidity preference (Spec v1.0 §5)
+  planRigidity PlanRigidity @default(LOCKED_1_DAY)
+
+  // User's preferred locale (e.g. en, pl, de)
+  locale String?
+
+  // Athlete identity (PRO)
+  club       String?
+  location   String?
+  timezone   String?
+  birthYear  Int?
+
+  // Structured availability (Json)
+  availability Json?
+  // Training preferences (Json)
+  preferences  Json?
+  // Guardrails (Json)
+  guardrails   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model Workout {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  type        String
+  date        DateTime
+  planned     Boolean  @default(false)
+  completed   Boolean  @default(false)
+
+  durationMin   Int?
+  distanceKm    Float?
+  distanceM     Int?
+  avgHR         Int?
+  maxHR         Int?
+  avgPower      Int?
+  tss           Int?
+  calories      Int?
+  elevationM    Int?
+  notes         String?
+
+  descriptionMd String?
+  prescriptionJson String?
+
+  aiGenerated   Boolean  @default(false)
+  aiReason      String?
+  aiConfidence  Int?
+  source        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  diaryEntries DiaryEntry[]
+  feedback     PostWorkoutFeedback?
+  aiWarnings   AIWarning[]
+  planChangeProposals PlanChangeProposal[]
+
+  @@index([userId, date])
+  @@map("workouts")
+}
+
+model DiaryEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date      DateTime
+  mood      Int?      // 1-5
+  energy    Int?      // 1-5
+  sleepHrs  Float?
+  sleepQual Int?      // 1-5
+  stress    Int?      // 1-5
+  soreness  Int?      // 1-5
+  motivation Int?     // 1-5 (NEW)
+  notes     String?
+
+  workoutId String?
+  workout   Workout? @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+
+  // AI Access Control
+  visibilityLevel DiaryVisibility @default(FULL_AI_ACCESS)
+  aiUsedForTraining Boolean @default(false) // Trust label: AI used this entry
+  aiUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@map("diary_entries")
+}
+
+model MetricDaily {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date      DateTime
+
+  atl       Float?
+  ctl       Float?
+  tsb       Float?
+  tss       Int?
+  duration  Int?
+  distance  Float?
+  
+  // Readiness system
+  readinessScore      Int?     // 0-100
+  readinessStatus     String?  // OPTIMAL | CAUTION | FATIGUED
+  readinessFactorsJson String? // JSON: top contributors
+  readinessConfidence Int?     // 0-100
+  
+  // Fatigue detection
+  fatigueType        String?  // CNS | MUSCULAR | METABOLIC | PSYCHOLOGICAL | NONE
+  fatigueReasonsJson String?  // JSON: contributors
+  
+  // Load tracking
+  weeklyLoad    Int?    // Rolling 7-day load
+  rampRate      Float?  // Week-over-week % change
+  rampStatus    String? // SAFE | WARNING | DANGER
+  
+  // Compliance tracking
+  complianceScore      Int?     // 0-100
+  complianceStatus     String?  // STRONG | SLIPPING | FRAGILE
+  complianceReasonsJson String? // JSON: top contributors
+  plannedWorkouts      Int?     // Last 14 days
+  completedWorkouts    Int?     // Last 14 days
+  currentStreak        Int?     // Days trained in a row
+  
+  // Burnout prevention
+  burnoutRisk          Int?     // 0-100
+  burnoutStatus        String?  // LOW | MODERATE | HIGH
+  burnoutDriversJson   String?  // JSON: drivers
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("metrics_daily")
+}
+
+model Quote {
+  id        String   @id @default(cuid())
+  text      String
+  author    String
+  category  String   // ENDURANCE | DISCIPLINE | MENTAL_TOUGHNESS | RECOVERY | GROWTH | FOCUS
+  source    String?  // Book, speech, interview, etc.
+  tone      String?  // SUPPORTIVE | EXECUTION | NEUTRAL
+  createdAt DateTime @default(now())
+
+  @@index([category])
+  @@index([tone])
+  @@map("quotes")
+}
+
+model PlanGenerationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startDate       DateTime
+  endDate         DateTime
+  summaryMd       String
+  constraintsJson String?
+  warningsJson    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("plan_generation_logs")
+}
+
+model DailyInsight {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date           DateTime
+  insightText    String
+  insightType    String   // readiness | compliance | fatigue | motivation | recovery
+  driversJson    String?  // JSON: what triggered this insight
+  dismissed      Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("daily_insights")
+}
+
+// ============================================
+// PHASE E-1: Progress & Season Story
+// ============================================
+
+// Season plan rigidity (Season HQ)
+enum SeasonPlanRigidity {
+  LOCKED
+  SEMI_LOCKED
+  FLEXIBLE
+}
+
+// Milestone/race kind for Season HQ
+enum SeasonMilestoneKind {
+  A_RACE
+  B_RACE
+  C_RACE
+  TEST
+  CAMP
+}
+
+// Focus discipline for training blocks
+enum FocusDiscipline {
+  SWIM
+  BIKE
+  RUN
+  STRENGTH
+  MIXED
+}
+
+model Season {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  startDate     DateTime
+  endDate       DateTime
+  primaryGoal   String?
+  sport         String?   @default("Triathlon")
+  goalRaceDate  DateTime?
+  planRigidity  SeasonPlanRigidity?
+  constraints   String?   // JSON: maxWeeklyHours, availability, intensityLimit, injuryNote
+  disciplineFocus String? // JSON: slider values swim/bike/run/strength
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trainingBlocks TrainingBlock[]
+  raceEvents     RaceEvent[]
+  seasonAlerts   SeasonAlert[]
+
+  @@index([userId])
+  @@map("seasons")
+}
+
+model TrainingBlock {
+  id        String   @id @default(cuid())
+  seasonId  String
+  season    Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String   // BASE | BUILD | PEAK | TAPER | RECOVERY
+  startDate   DateTime
+  endDate     DateTime
+  focus       String?
+  targetHours Float?
+
+  // Season HQ extended fields
+  targetHoursMin  Float?
+  targetHoursMax  Float?
+  targetTSSMin    Int?
+  targetTSSMax    Int?
+  focusDiscipline FocusDiscipline?
+  focusLabel      String?
+  intensityCap    Float?
+  guardrails      String?  // JSON: maxHardSessionsPerWeek, rampRateLimit
+  blockOrder      Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([seasonId])
+  @@map("training_blocks")
+}
+
+model RaceEvent {
+  id        String   @id @default(cuid())
+  seasonId  String?
+  season    Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  date      DateTime
+  distance  String?  // e.g. "Half Marathon", "70.3", "10k"
+  priority  String   // A | B | C
+  goalTime  String?
+  notes     String?
+  kind      SeasonMilestoneKind?  // A_RACE | B_RACE | C_RACE | TEST | CAMP
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("race_events")
+}
+
+model SeasonAlert {
+  id          String   @id @default(cuid())
+  seasonId    String
+  season      Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  type        String   // OVERLOAD_RISK | COMPLIANCE_DROP | RACE_PROXIMITY | MISSING_PROFILE_DATA
+  severity    String   // info | warn | danger
+  title       String
+  message     String
+  why         String?  // "Why it matters"
+  ctaLabel    String?
+  ctaActionKey String?
+  dismissedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([seasonId])
+  @@map("season_alerts")
+}
+
+model PersonalBest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sport       String   // RUN | BIKE | SWIM | STRENGTH
+  discipline  String   // e.g. "5k", "10k", "FTP", "400m", "1RM squat"
+  valueNumber Float    // seconds, watts, kg, etc.
+  valueUnit   String   // s | w | kg | pace | m
+  date        DateTime
+  notes       String?
+  source      String   // MANUAL | WORKOUT | TEST
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("personal_bests")
+}
+
+model InjuryEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime?
+  area      String    // e.g. "knee", "hamstring", "shoulder"
+  severity  String    // LOW | MODERATE | HIGH
+  status    String    // ACTIVE | RESOLVED
+  notes     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("injury_events")
+}
+
+model GeneratedReport {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String   // WEEKLY | MONTHLY
+  periodStart DateTime
+  periodEnd   DateTime
+  title       String
+  summaryMd   String
+  metricsJson String?  // JSON: key stats
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@unique([userId, type, periodStart])
+  @@map("generated_reports")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  name            String
+  requestId       String?
+  route           String?
+  source          String?
+  propertiesJson  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([name, createdAt])
+  @@index([requestId])
+  @@map("analytics_events")
+}
+
+// ============================================
+// PHASE E-2: What-If Simulator
+// ============================================
+
+model SimulationScenario {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  durationWeeks Int      // 2-12
+  paramsJson    String   // JSON: volumeChange, intensityBias, recoveryFocus, complianceAssumption, identityModeOverride
+  applied       Boolean  @default(false)
+  appliedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  results  SimulationResult[]
+  warnings AIWarning[]
+
+  @@index([userId])
+  @@map("simulation_scenarios")
+}
+
+model SimulationResult {
+  id         String   @id @default(cuid())
+  scenarioId String
+  scenario   SimulationScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  weekIndex            Int
+  simulatedCTL         Float
+  simulatedATL         Float
+  simulatedTSB         Float
+  simulatedReadinessAvg Int
+  simulatedBurnoutRisk  Int
+  weeklyTSS            Int?
+  insightsJson         String?  // JSON: weekly insights
+  warningsJson         String?  // JSON: guardrail warnings
+
+  createdAt DateTime @default(now())
+
+  @@unique([scenarioId, weekIndex])
+  @@index([userId])
+  @@map("simulation_results")
+}
+
+// ============================================
+// PHASE F: Coach Mode + Trust Layer
+// ============================================
+
+model CoachAthleteLink {
+  id            String   @id @default(cuid())
+  coachUserId   String
+  coach         User     @relation("CoachLinks", fields: [coachUserId], references: [id], onDelete: Cascade)
+  athleteUserId String
+  athlete       User     @relation("AthleteLinks", fields: [athleteUserId], references: [id], onDelete: Cascade)
+  
+  status        String   @default("PENDING") // PENDING | ACTIVE | REVOKED
+  inviteCode    String?  @unique
+  
+  createdAt     DateTime @default(now())
+  activatedAt   DateTime?
+
+  @@unique([coachUserId, athleteUserId])
+  @@index([coachUserId])
+  @@index([athleteUserId])
+  @@index([inviteCode])
+  @@map("coach_athlete_links")
+}
+
+model CoachComment {
+  id            String   @id @default(cuid())
+  authorUserId  String
+  author        User     @relation("CommentAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  athleteUserId String
+  athlete       User     @relation("CommentAthlete", fields: [athleteUserId], references: [id], onDelete: Cascade)
+  
+  type          String   // WEEK | WORKOUT | DIARY
+  targetDate    DateTime // date for week start or specific day
+  workoutId     String?
+  diaryEntryId  String?
+  content       String
+  
+  createdAt     DateTime @default(now())
+
+  @@index([athleteUserId])
+  @@index([authorUserId])
+  @@index([targetDate])
+  @@map("coach_comments")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String   // athlete who owns the data
+  user        User     @relation("AuditOwner", fields: [userId], references: [id], onDelete: Cascade)
+  actorUserId String?  // who did it (null = system)
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  
+  actionType  String   // AI_PLAN_GENERATED | AI_GUARDRAIL_APPLIED | AI_DELOAD_APPLIED | SIMULATION_APPLIED | WORKOUT_EDITED | DIARY_UPDATED | SETTINGS_CHANGED | COACH_COMMENT_ADDED | AI_WORKOUT_ADAPTED
+  targetType  String   // WORKOUT | DIARY | PLAN | SEASON | REPORT | SIMULATION | SETTINGS | CHECK_IN
+  targetId    String?
+  summary     String
+  detailsJson String?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum PlanChangeProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model PlanChangeProposal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workoutId String?
+  workout   Workout? @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+
+  checkInId String?
+  sourceType String  // DAILY_CHECKIN | COACH | RULE
+
+  summary   String
+  patchJson String
+  confidence Int?
+
+  status    PlanChangeProposalStatus @default(PENDING)
+  decidedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([workoutId])
+  @@index([createdAt])
+  @@map("plan_change_proposals")
+}
+
+// ============================================
+// ATHLETE SIGNAL ENGINE
+// ============================================
+
+model DailyCheckIn {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  date        DateTime // The training day this check-in is for (YYYY-MM-DD in user timezone)
+  workoutId   String?  // Optional link to specific workout
+  
+  // ========================================
+  // NEW: Premium Check-in Fields (0-100 scale)
+  // ========================================
+  sleepQuality100   Int?     // 0-100 slider
+  fatigue100        Int?     // 0-100 (higher = more fatigued)
+  motivation100     Int?     // 0-100
+  soreness100       Int?     // 0-100 (higher = more sore)
+  stress100         Int?     // 0-100 (higher = more stressed)
+  
+  // Computed readiness
+  readinessScore    Int?     // 0-100 (computed from above)
+  topFactor         String?  // e.g. "Sleep", "Fatigue", "Soreness"
+  recommendation    String?  // e.g. "Keep today easy", "Proceed as planned"
+  
+  // Privacy-aware notes
+  notes             String?  // max 240 chars, privacy controlled
+  notesVisibility   DiaryVisibility @default(FULL_AI_ACCESS)
+  
+  // ========================================
+  // Legacy fields (1-5 scale) for backward compat
+  // ========================================
+  sleepDuration    Float?   // Hours of sleep
+  sleepQuality     Int?     // 1-5 (legacy)
+  physicalFatigue  Int?     // 1-5 (1=fresh, 5=exhausted)
+  mentalReadiness  Int?     // 1-5 (1=not ready, 5=fully ready)
+  motivation       Int?     // 1-5 (legacy)
+  muscleSoreness   MuscleSoreness @default(NONE)
+  stressLevel      Int?     // 1-5 (legacy)
+  mood             Int?     // 1-5 (derived from mentalReadiness)
+  energy           Int?     // 1-5 (inverse of physicalFatigue)
+  sorenessAreasJson String? // JSON array: ["hamstring", "lower_back", "shoulders"]
+
+  // ========================================
+  // AI pre-flight decision
+  // ========================================
+  aiDecision       PreTrainingDecision?
+  aiReasonJson     String?  // JSON: explanation factors with coaching language
+  aiConfidence     Int?     // 0-100
+  aiExplanation    String?  // Human-readable explanation of the decision
+  
+  // Original workout snapshot (before adaptation)
+  originalWorkoutJson String? // Snapshot of workout before AI adaptation
+  
+  // User response
+  userAccepted       Boolean?
+  userOverrideReason String?
+  
+  // Conflict detection
+  hasConflict        Boolean  @default(false)
+  conflictReason     String?  // e.g. "Low readiness vs intense workout"
+  suggestedChange    String?  // JSON: proposed workout change
+  
+  // Immutability flag (set when workout starts)
+  lockedAt         DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("daily_checkins")
+}
+
+model PreTrainingCheckIn {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutId   String   @unique
+  
+  mood        Int      // 1-5
+  energy      Int      // 1-5
+  stress      Int      // 1-5
+  sorenessAreasJson String? // JSON array: ["hamstring", "lower_back", "shoulders"]
+  notes       String?
+  
+  // AI pre-flight decision
+  aiDecision       PreTrainingDecision?
+  aiReasonJson     String?  // JSON: explanation factors
+  aiConfidence     Int?     // 0-100
+  
+  // User response
+  userAccepted     Boolean?
+  userOverrideReason String?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workoutId])
+  @@map("pre_training_checkins")
+}
+
+// ============================================
+// POST-TRAINING FEEDBACK SYSTEM
+// ============================================
+
+model PostWorkoutFeedback {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutId   String   @unique
+  workout     Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  
+  // Structured feedback
+  perceivedDifficulty PerceivedDifficulty
+  vsPlanned           FeltVsPlanned
+  enjoyment           Int      // 1-5
+  discomfort          MuscleSoreness @default(NONE)
+  mentalState         Int      @default(3)      // 1-5 (mental state after workout)
+  painOrDiscomfort    String?  // Free text describing any pain (legacy, kept for compatibility)
+  
+  // Free-text comment (very important)
+  comment             String?
+
+  actualAvgHR         Int?
+  actualMaxHR         Int?
+  actualPaceText      String?
+  actualRpe           Int?
+
+  actualFeel          Int?
+
+  sessionEquipment    String?
+  sessionTerrain      String?
+  sessionAvailability String?
+  
+  // AI visibility controls
+  visibleToAI              Boolean @default(true)
+  visibleToFuturePlanning  Boolean @default(true)
+  
+  // Edit control
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workoutId])
+  @@index([createdAt])
+  @@map("post_workout_feedback")
+}
+
+model FeedbackAggregation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  weekStart   DateTime
+  weekEnd     DateTime
+  
+  // Aggregated metrics
+  totalWorkouts        Int
+  feedbackCount        Int
+  avgEnjoyment         Float?
+  tooHardCount         Int      // sessions marked HARD or BRUTAL
+  harderThanPlannedCount Int    // sessions felt HARDER than planned
+  easierThanPlannedCount Int    // sessions felt EASIER than planned
+  painReportedCount    Int
+  
+  // AI learning outputs
+  intensityAdjustment  Float?   // suggested % adjustment (-20 to +20)
+  confidenceImpact     Int?     // impact on AI confidence (-10 to +10)
+  toneAdjustment       String?  // ENCOURAGING | NEUTRAL | CAUTIOUS
+  insightsJson         String?  // JSON: key learnings
+  
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@map("feedback_aggregations")
+}
+
+// ============================================
+// AI MEMORY SYSTEM
+// ============================================
+
+model AIMemory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Memory layer (Spec v1.0 §4)
+  memoryLayer MemoryLayer @default(SHORT_TERM)
+  
+  // Memory type
+  memoryType  MemoryType
+  
+  // Aggregated insights (no raw text stored)
+  title       String
+  summary     String   // Aggregated insight summary (never raw diary text)
+  confidence  Int      @default(50) // 0-100 confidence level
+  dataPoints  Int      @default(0)  // Number of entries used to build this
+  
+  // Source references (IDs only, no raw text)
+  sourceIdsJson String? // JSON array of source entry IDs: {"checkIns": [], "feedback": [], "diary": []}
+  
+  // Specific profile data (JSON)
+  profileDataJson String? // Structured data for the profile type
+  
+  // Time range
+  periodStart DateTime
+  periodEnd   DateTime
+  
+  // Decay logic (Spec v1.0 §4.1)
+  expiresAt   DateTime? // null = never expires (LONG_TERM); set for SHORT_TERM/MID_TERM
+  
+  // Versioning
+  version     Int      @default(1)
+  supersededBy String? // ID of newer memory that replaced this
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([memoryLayer])
+  @@index([memoryType])
+  @@index([expiresAt])
+  @@index([userId, memoryLayer]) // Composite index for layer queries
+  @@index([userId, memoryType])  // Composite index for type queries
+  @@map("ai_memories")
+}
+
+model AIMemoryAudit {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action      String   // CREATED | UPDATED | RESET | EXPORTED
+  memoryType  String?  // Which memory type was affected
+  details     String?  // Additional context
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("ai_memory_audits")
+}
+
+// ============================================
+// AI WARNING SYSTEM (Spec v1.0 §7)
+// Links simulator projections to real-time plan warnings
+// ============================================
+
+model AIWarning {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Source: which simulation triggered this warning
+  scenarioId  String?
+  scenario    SimulationScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+  
+  // Warning details
+  warningType WarningType
+  severity    WarningSeverity
+  title       String
+  message     String   // Human-readable warning
+  
+  // Trigger data
+  triggerMetricJson String? // JSON: what metric triggered this (e.g. {"burnoutRisk": 78, "threshold": 70})
+  
+  // Target: what this warning applies to
+  targetDate  DateTime? // Specific date if applicable
+  workoutId   String?   // Specific workout if applicable
+  workout     Workout?  @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  
+  // Status
+  acknowledged Boolean @default(false)
+  acknowledgedAt DateTime?
+  dismissed    Boolean @default(false)
+  dismissedAt  DateTime?
+  
+  // AI confidence in this warning
+  confidence  Int      @default(70) // 0-100
+  
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime? // Warning expires after this date
+
+  @@index([userId])
+  @@index([scenarioId])
+  @@index([warningType])
+  @@index([targetDate])
+  @@map("ai_warnings")
+}
+
+// ============================================
+// INTELLIGENT JOURNAL
+// ============================================
+
+model JournalInsight {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type        String   // NEGATIVE_STREAK | BURNOUT_SIGNAL | MOTIVATION_DROP | SLEEP_PATTERN | STRESS_PATTERN | POSITIVE_TREND
+  severity    String   // LOW | MEDIUM | HIGH
+  title       String
+  message     String
+  suggestion  String?
+  
+  // Pattern data
+  startDate   DateTime
+  endDate     DateTime
+  dataPointsJson String?  // JSON: relevant diary entries/metrics
+  
+  // Status
+  dismissed   Boolean  @default(false)
+  acknowledged Boolean @default(false)
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("journal_insights")
+}
+
+// ============================================
+// AI COACH SUGGESTIONS
+// ============================================
+
+model CoachSuggestion {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contextDate DateTime // Day this suggestion applies to
+  scope       String   // "today" | "week" | "season"
+  type        String   // ADJUST_INTENSITY | SWAP_SESSION | ADD_RECOVERY | REBALANCE_WEEK | REDUCE_VOLUME | MOVE_SESSION | ADD_EASY_SESSION
+
+  title       String
+  summary     String   // Short impact, e.g. "-10% intensity, keep volume"
+  why         String   // Detailed rationale
+  payload     String   // JSON: action-specific instructions
+
+  status      String   @default("PENDING") // PENDING | APPLIED | DISMISSED
+  appliedAt   DateTime?
+  dismissedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, contextDate])
+  @@map("coach_suggestions")
+}
