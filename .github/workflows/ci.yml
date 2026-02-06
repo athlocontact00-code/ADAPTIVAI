@@ -9,6 +9,17 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +37,3 @@ jobs:
 
       - name: Run CI gates (lint, typecheck, build)
         run: npm run ci
-        env:
-          DATABASE_URL: "file:./prisma/dev.db"
-          NEXTAUTH_SECRET: "ci-secret-min-32-chars-long-for-test"
-          NEXTAUTH_URL: "http://localhost:3000"
