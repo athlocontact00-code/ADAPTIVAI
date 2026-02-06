@@ -10,18 +10,24 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     env:
-      # Local SQLite for CI build
+      # CI DATABASE: use SQLite so build/tests don't depend on external DB
       DATABASE_URL: "file:./prisma/dev.db"
 
-      # NextAuth needs these at build time (env validation)
       NEXTAUTH_URL: "http://localhost:3000"
-      NEXTAUTH_SECRET: "ci-secret-min-32-chars-long-for-test-123456"
+      NEXTAUTH_SECRET: "ci-nextauth-secret-min-32-chars-xxxxxxxx"
 
-      # Required by your /api/internal/cron/* routes validation in production build
-      INTERNAL_CRON_SECRET: "ci-internal-cron-secret-min-16-chars"
+      # Required in production by your env validation, set a safe CI fallback
+      INTERNAL_CRON_SECRET: "ci-internal-cron-secret-16chars"
 
-      # Optional: keep app URL consistent (not required for CI build)
+      # Stripe (safe dummy values for CI build-time validation)
+      STRIPE_SECRET_KEY: "sk_test_dummy"
+      STRIPE_WEBHOOK_SECRET: "whsec_dummy"
+      STRIPE_PRICE_ID_PRO: "price_dummy"
+      STRIPE_PRODUCT_ID_PRO: "prod_dummy"
+
+      # Optional / used by app
       APP_URL: "http://localhost:3000"
+      OPENAI_API_KEY: "sk-dummy"
 
     steps:
       - uses: actions/checkout@v4

@@ -3,6 +3,7 @@ import { z } from "zod";
 const envSchema = z
   .object({
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+    DIRECT_URL: z.string().min(1, "DIRECT_URL is required"),
     NEXTAUTH_URL: z.string().url("NEXTAUTH_URL must be a valid URL"),
     NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be at least 32 characters"),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -86,7 +87,8 @@ function validateEnv(): Env {
       console.error(`  • ${issue.path.join(".")}: ${issue.message}`);
     });
     console.error("\n📋 Required environment variables:");
-    console.error("  - DATABASE_URL: Database connection string");
+    console.error("  - DATABASE_URL: Database connection string (Supabase pooler)");
+    console.error("  - DIRECT_URL: Direct connection string (Supabase, for migrations)");
     console.error("  - NEXTAUTH_URL: Base URL for NextAuth (e.g., http://localhost:3000)");
     console.error("  - NEXTAUTH_SECRET: Secret key for NextAuth (min 32 chars)");
     console.error("\n💡 Copy .env.example to .env and fill in the values.\n");
@@ -107,8 +109,9 @@ export function isDevelopment(): boolean {
   return env.NODE_ENV === "development";
 }
 
+/** @deprecated Project uses PostgreSQL only; kept for compatibility. */
 export function isSQLite(): boolean {
-  return env.DATABASE_URL.startsWith("file:");
+  return false;
 }
 
 export function isPostgres(): boolean {

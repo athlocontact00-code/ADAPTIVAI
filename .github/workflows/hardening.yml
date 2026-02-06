@@ -27,4 +27,5 @@ jobs:
         run: npm run hardening:checks
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
           HARDENING_USER_ID: ${{ secrets.HARDENING_USER_ID }}
