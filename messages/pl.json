@@ -145,6 +145,10 @@
   "empty": {
     "noData": "Brak danych"
   },
+  "onboarding": {
+    "next": "Dalej",
+    "weeklyHoursRequired": "Cel godzin tygodniowo musi być większy niż 0"
+  },
   "auth": {
     "login": "Logowanie",
     "register": "Rejestracja",

@@ -149,6 +149,7 @@
     "welcome": "Welcome! Let's get started",
     "step": "Step",
     "of": "of",
+    "next": "Next",
     "continue": "Continue",
     "back": "Back",
     "goal": "Goal",
@@ -171,7 +172,8 @@
     "firstWorkout": "First workout",
     "today": "today",
     "tomorrow": "tomorrow",
-    "finishSetup": "Finish setup"
+    "finishSetup": "Finish setup",
+    "weeklyHoursRequired": "Weekly hours goal must be greater than 0"
   },
   "notifications": {
     "title": "Notifications",

@@ -150,6 +150,20 @@ export default function OnboardingPage() {
 
   const isComplete = step === 4;
 
+  const weeklyHoursNum = formData.weeklyHoursGoal.trim() ? parseFloat(formData.weeklyHoursGoal.trim()) : NaN;
+  const weeklyHoursValid = !Number.isNaN(weeklyHoursNum) && weeklyHoursNum > 0;
+  const step1SelectsFilled =
+    Boolean(formData.goal) && Boolean(formData.sportPrimary) && Boolean(formData.experienceLevel);
+  const step1Valid = step1SelectsFilled && weeklyHoursValid;
+  const step1WeeklyHoursTouched = formData.weeklyHoursGoal.trim().length > 0;
+  const step1ShowWeeklyHoursError = step1WeeklyHoursTouched && !weeklyHoursValid;
+
+  function handleStep1Submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!step1Valid) return;
+    handleContinue();
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/20 p-4 sm:p-6">
       <div className="flex items-center gap-2 mb-6">
@@ -168,7 +182,7 @@ export default function OnboardingPage() {
 
       <div className="flex-1 max-w-md w-full mx-auto">
         {step === 1 && (
-          <>
+          <form onSubmit={handleStep1Submit} className="flex flex-col min-h-0 pb-32">
             <h1 className="text-xl font-semibold mb-1">{t("welcome")}</h1>
             <p className="text-sm text-muted-foreground mb-6">Profile snapshot</p>
             <div className="space-y-4">
@@ -228,13 +242,29 @@ export default function OnboardingPage() {
                 <Label>Weekly hours goal</Label>
                 <Input
                   type="number"
+                  min={0.5}
+                  step={0.5}
                   placeholder="e.g. 6"
                   value={formData.weeklyHoursGoal}
                   onChange={(e) => setFormData({ ...formData, weeklyHoursGoal: e.target.value })}
                 />
+                {step1ShowWeeklyHoursError && (
+                  <p className="text-sm text-destructive mt-1">{t("weeklyHoursRequired")}</p>
+                )}
               </div>
             </div>
-          </>
+            <div
+              className={cn(
+                "sticky bottom-0 left-0 right-0 mt-6 pt-4 pb-6 -mx-4 px-4 sm:-mx-6 sm:px-6",
+                "bg-background/80 dark:bg-background/90 backdrop-blur-sm border-t border-border/50"
+              )}
+            >
+              <Button type="submit" className="w-full" size="lg" disabled={!step1Valid}>
+                {t("next")}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </form>
         )}
 
         {step === 2 && (
