@@ -26,7 +26,11 @@ function parseAvailability(
     : undefined;
   const max = o.maxMinutesPerDay;
   const maxNum =
-    typeof max === "number" && max >= 15 && max <= 480 ? max : undefined;
+    max === null
+      ? null
+      : typeof max === "number" && max >= 15 && max <= 480
+        ? max
+        : undefined;
   const preferred =
     o.preferredTime === "morning" ||
     o.preferredTime === "evening" ||
@@ -45,7 +49,7 @@ function parseAvailability(
       : undefined;
   if (
     !daysArr?.length &&
-    maxNum == null &&
+    maxNum === undefined &&
     !preferred &&
     rest == null &&
     atLeast == null
@@ -53,7 +57,7 @@ function parseAvailability(
     return null;
   return {
     ...(daysArr?.length && { daysAvailable: daysArr as (0 | 1 | 2 | 3 | 4 | 5 | 6)[] }),
-    ...(maxNum != null && { maxMinutesPerDay: maxNum }),
+    ...(maxNum !== undefined && { maxMinutesPerDay: maxNum }),
     ...(preferred && { preferredTime: preferred }),
     ...(rest != null && { restDaysPreference: rest }),
     ...(atLeast != null && { atLeastOneRestDayPerWeek: atLeast }),

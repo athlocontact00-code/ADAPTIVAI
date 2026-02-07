@@ -14,7 +14,7 @@ const onboardingSchema = z.object({
   availability: z
     .object({
       daysAvailable: z.array(z.number().min(0).max(6)).optional(),
-      maxMinutesPerDay: z.number().optional(),
+      maxMinutesPerDay: z.union([z.number().min(15).max(480), z.null()]).optional(),
       preferredTime: z.enum(["morning", "evening", "any"]).optional(),
     })
     .optional(),
@@ -66,7 +66,9 @@ export async function POST(req: Request) {
       ? {
           ...currentAvail,
           ...(data.availability.daysAvailable != null && { daysAvailable: data.availability.daysAvailable }),
-          ...(data.availability.maxMinutesPerDay != null && { maxMinutesPerDay: data.availability.maxMinutesPerDay }),
+          ...(data.availability.maxMinutesPerDay !== undefined && {
+            maxMinutesPerDay: data.availability.maxMinutesPerDay,
+          }),
           ...(data.availability.preferredTime != null && { preferredTime: data.availability.preferredTime }),
         }
       : currentAvail;

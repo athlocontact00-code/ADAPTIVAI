@@ -10,7 +10,8 @@ export type SwimPreference = "pool" | "open_water" | "both";
 
 export interface AvailabilityData {
   daysAvailable?: DayOfWeek[];
-  maxMinutesPerDay?: number;
+  /** null = no limit (do not cap session duration) */
+  maxMinutesPerDay?: number | null;
   preferredTime?: PreferredTime;
   restDaysPreference?: number; // 0-2
   atLeastOneRestDayPerWeek?: boolean;
@@ -34,7 +35,9 @@ export interface GuardrailsData {
   limitWeeklyRampRatePercent?: number; // 10-20
 }
 
-export const AVAILABILITY_PRESETS = [30, 45, 60, 90, 120] as const;
+/** null = "No limit"; numbers in minutes. Max 180 extends beyond previous 120 cap. */
+export const AVAILABILITY_PRESETS = [null, 30, 45, 60, 90, 120, 180] as const;
+export type MaxMinutesPreset = (typeof AVAILABILITY_PRESETS)[number];
 export const BIRTH_YEAR_MIN = 1930;
 export const BIRTH_YEAR_MAX = 2015;
 export const RAMP_RATE_MIN = 5;

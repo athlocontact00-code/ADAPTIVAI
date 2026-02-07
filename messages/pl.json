@@ -68,6 +68,8 @@
     "equipment": "Sprzęt",
     "terrain": "Terenu i miejsca",
     "availability": "Dostępność",
+    "maxTimePerDayNoLimit": "Bez limitu",
+    "maxTimePerDayNoLimitHint": "Bez limitu oznacza, że nie będziemy ograniczać długości sesji.",
     "planRigidity": "Sztywność planu",
     "planRigidityDesc": "Gdy zablokowany — zmiany stają się propozycjami.",
     "coachingStyle": "Styl coachingu",
@@ -147,7 +149,9 @@
   },
   "onboarding": {
     "next": "Dalej",
-    "weeklyHoursRequired": "Cel godzin tygodniowo musi być większy niż 0"
+    "weeklyHoursRequired": "Cel godzin tygodniowo musi być większy niż 0",
+    "maxTimePerDayUnlimited": "Bez limitu",
+    "maxTimePerDayNoLimitHint": "Bez limitu oznacza, że nie będziemy ograniczać długości sesji."
   },
   "auth": {
     "login": "Logowanie",

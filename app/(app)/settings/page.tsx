@@ -72,6 +72,7 @@ import type {
   SurfacePreference,
   SwimPreference,
 } from "@/lib/types/profile";
+import { AVAILABILITY_PRESETS } from "@/lib/types/profile";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { parseMmSsToSeconds, formatSecondsToMmSs } from "@/lib/utils/parse-time";
 import { cn } from "@/lib/utils";
@@ -884,11 +885,11 @@ export default function SettingsPage() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <SettingsField label="Max time per day" hint="Minutes">
                         <div className="flex flex-wrap gap-2">
-                          {[30, 45, 60, 90, 120].map((m) => {
+                          {AVAILABILITY_PRESETS.map((m) => {
                             const sel = availability.maxMinutesPerDay === m;
                             return (
                               <button
-                                key={m}
+                                key={m ?? "null"}
                                 type="button"
                                 onClick={() => setAvailability({ ...availability, maxMinutesPerDay: m })}
                                 className={cn(
@@ -896,11 +897,12 @@ export default function SettingsPage() {
                                   sel ? "border-primary bg-primary/20 text-primary" : "border-white/[0.08] hover:border-white/15"
                                 )}
                               >
-                                {m} min
+                                {m === null ? t("maxTimePerDayNoLimit") : `${m} min`}
                               </button>
                             );
                           })}
                         </div>
+                        <p className="text-xs text-muted-foreground mt-1.5">{t("maxTimePerDayNoLimitHint")}</p>
                       </SettingsField>
                       <SettingsField label="Preferred time">
                         <div className="flex rounded-lg border border-white/[0.08] p-0.5">

@@ -34,7 +34,7 @@ export default function OnboardingPage() {
     weeklyHoursGoal: "",
     goal: "" as "" | "race" | "general_fitness" | "build_base",
     daysAvailable: [] as number[],
-    maxMinutesPerDay: 60 as number,
+    maxMinutesPerDay: 60 as number | null,
     preferredTime: "any" as "morning" | "evening" | "any",
   });
 
@@ -45,10 +45,13 @@ export default function OnboardingPage() {
       maxMinutesPerDay: formData.maxMinutesPerDay,
       preferredTime: formData.preferredTime,
       availability:
-        formData.daysAvailable.length > 0 || formData.maxMinutesPerDay || formData.preferredTime
+        formData.daysAvailable.length > 0 ||
+        formData.maxMinutesPerDay !== undefined ||
+        formData.preferredTime
           ? {
               daysAvailable: formData.daysAvailable,
-              maxMinutesPerDay: formData.maxMinutesPerDay,
+              maxMinutesPerDay:
+                formData.maxMinutesPerDay === undefined ? undefined : formData.maxMinutesPerDay,
               preferredTime: formData.preferredTime,
             }
           : undefined,
@@ -123,7 +126,8 @@ export default function OnboardingPage() {
           goal: formData.goal || undefined,
           availability: {
             daysAvailable: formData.daysAvailable,
-            maxMinutesPerDay: formData.maxMinutesPerDay,
+            maxMinutesPerDay:
+              formData.maxMinutesPerDay === undefined ? undefined : formData.maxMinutesPerDay,
             preferredTime: formData.preferredTime,
           },
           dismiss: true,
@@ -292,7 +296,7 @@ export default function OnboardingPage() {
                 <div className="flex flex-wrap gap-2 mt-2">
                   {AVAILABILITY_PRESETS.map((m) => (
                     <button
-                      key={m}
+                      key={m ?? "null"}
                       type="button"
                       onClick={() => setFormData({ ...formData, maxMinutesPerDay: m })}
                       className={cn(
@@ -300,10 +304,11 @@ export default function OnboardingPage() {
                         formData.maxMinutesPerDay === m ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
                       )}
                     >
-                      {m} min
+                      {m === null ? t("maxTimePerDayUnlimited") : `${m} min`}
                     </button>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground mt-1.5">{t("maxTimePerDayNoLimitHint")}</p>
               </div>
               <div>
                 <Label>{t("preferredTime")}</Label>
