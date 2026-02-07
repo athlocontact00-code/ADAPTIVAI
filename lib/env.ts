@@ -87,8 +87,8 @@ function validateEnv(): Env {
       console.error(`  • ${issue.path.join(".")}: ${issue.message}`);
     });
     console.error("\n📋 Required environment variables:");
-    console.error("  - DATABASE_URL: Database connection string (Supabase pooler)");
-    console.error("  - DIRECT_URL: Direct connection string (Supabase, for migrations)");
+    console.error("  - DATABASE_URL: Database connection string (Neon pooled/pgbouncer)");
+    console.error("  - DIRECT_URL: Direct connection string (Neon, for migrations)");
     console.error("  - NEXTAUTH_URL: Base URL for NextAuth (e.g., http://localhost:3000)");
     console.error("  - NEXTAUTH_SECRET: Secret key for NextAuth (min 32 chars)");
     console.error("\n💡 Copy .env.example to .env and fill in the values.\n");

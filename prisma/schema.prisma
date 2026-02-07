@@ -10,7 +10,7 @@ datasource db {
 
 // ============================================
 // ENUMS (Spec v1.0)
-// Note: SQLite stores these as strings; Prisma validates at app layer
+// Note: Prisma validates these at the app layer
 // ============================================
 
 // Pre-training AI decision (Spec v1.0 §1)

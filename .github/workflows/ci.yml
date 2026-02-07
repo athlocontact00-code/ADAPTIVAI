@@ -10,14 +10,15 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     env:
-      # CI DATABASE: use SQLite so build/tests don't depend on external DB
-      DATABASE_URL: "file:./prisma/dev.db"
+      # CI DATABASE: dummy Postgres to satisfy env validation
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/db?schema=public"
+      DIRECT_URL: "postgresql://user:pass@localhost:5432/db?schema=public"
 
       NEXTAUTH_URL: "http://localhost:3000"
-      NEXTAUTH_SECRET: "ci-nextauth-secret-min-32-chars-xxxxxxxx"
+      NEXTAUTH_SECRET: "ci-nextauth-secret-min-32-chars-xxxxxxxxxxxxxxxx"
 
       # Required in production by your env validation, set a safe CI fallback
-      INTERNAL_CRON_SECRET: "ci-internal-cron-secret-16chars"
+      INTERNAL_CRON_SECRET: "ci-internal-cron-secret-xxxxxxxxxxxxxxxx"
 
       # Stripe (safe dummy values for CI build-time validation)
       STRIPE_SECRET_KEY: "sk_test_dummy"

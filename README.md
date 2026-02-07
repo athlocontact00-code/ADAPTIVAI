@@ -14,7 +14,7 @@ An intelligent training platform built with Next.js, featuring performance analy
 
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
-- **Database**: PostgreSQL (Supabase)
+- **Database**: PostgreSQL (Neon)
 - **ORM**: Prisma
 - **Auth**: NextAuth v5
 - **UI**: Tailwind CSS, shadcn/ui, Lucide icons
@@ -80,27 +80,44 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-### Local Development (PostgreSQL / Supabase)
+### Local Development (PostgreSQL / Neon)
 
-Set in `.env` (use Supabase connection strings from project Settings > Database):
+Set in `.env` (use Neon connection strings from the Neon dashboard):
 
 ```env
-DATABASE_URL="postgresql://..."   # Pooler (e.g. port 6543)
-DIRECT_URL="postgresql://..."    # Direct (db.<project-ref>.supabase.co:5432)
+DATABASE_URL="postgresql://..."   # Neon pooled/pgbouncer (runtime)
+DIRECT_URL="postgresql://..."    # Neon direct (migrations)
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-secret-at-least-32-characters"
 NODE_ENV="development"
 ```
 
-### Production (Vercel + Supabase)
+### Production (Vercel + Neon)
 
 Set in Vercel Project Settings > Environment Variables (no values in repo):
 
-- `DATABASE_URL` – Supabase pooler connection string
-- `DIRECT_URL` – Supabase direct connection string
+- `DATABASE_URL` – Neon pooled/pgbouncer connection string
+- `DIRECT_URL` – Neon direct connection string
 - `NEXTAUTH_URL` – Your Vercel domain (e.g. https://your-app.vercel.app)
 - `NEXTAUTH_SECRET` – e.g. `openssl rand -base64 32`
 - `NODE_ENV=production`
+
+## Neon Setup
+
+Add these variables in Vercel (Project Settings > Environment Variables):
+
+- `DATABASE_URL` (pooled/pgbouncer)
+- `DIRECT_URL` (direct)
+- `APP_URL`
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
+- `INTERNAL_CRON_SECRET`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_ID_PRO`
+- `OPENAI_API_KEY`
+
+Note: If your password includes `!` or other special characters, the URL must use percent-encoding.
 
 ## Release Checks
 
@@ -188,19 +205,19 @@ adaptivai/
 
 ## Deployment to Vercel
 
-### 1. Create Supabase Project
+### 1. Create Neon Project
 
-1. Go to [supabase.com](https://supabase.com)
+1. Go to [neon.tech](https://neon.tech)
 2. Create a new project
-3. Copy the database connection string from Settings > Database
+3. Copy the pooled/pgbouncer and direct connection strings from the Neon dashboard
 
 ### 2. Deploy to Vercel
 
 1. Push code to GitHub
 2. Import project in Vercel
 3. Add environment variables (no secrets in repo):
-   - `DATABASE_URL` – Supabase pooler connection string (Transaction mode, e.g. port 6543)
-   - `DIRECT_URL` – Supabase direct connection string (db.\<project-ref\>.supabase.co:5432)
+   - `DATABASE_URL` – Neon pooled/pgbouncer connection string
+   - `DIRECT_URL` – Neon direct connection string
    - `NEXTAUTH_URL` – Your Vercel domain (e.g. https://your-app.vercel.app)
    - `NEXTAUTH_SECRET` – e.g. `openssl rand -base64 32`
 
