@@ -182,7 +182,7 @@ export default function OnboardingPage() {
 
       <div className="flex-1 max-w-md w-full mx-auto">
         {step === 1 && (
-          <form onSubmit={handleStep1Submit} className="flex flex-col min-h-0 pb-32">
+          <form onSubmit={handleStep1Submit}>
             <h1 className="text-xl font-semibold mb-1">{t("welcome")}</h1>
             <p className="text-sm text-muted-foreground mb-6">Profile snapshot</p>
             <div className="space-y-4">
@@ -253,12 +253,7 @@ export default function OnboardingPage() {
                 )}
               </div>
             </div>
-            <div
-              className={cn(
-                "sticky bottom-0 left-0 right-0 mt-6 pt-4 pb-6 -mx-4 px-4 sm:-mx-6 sm:px-6",
-                "bg-background/80 dark:bg-background/90 backdrop-blur-sm border-t border-border/50"
-              )}
-            >
+            <div className="mt-6">
               <Button type="submit" className="w-full" size="lg" disabled={!step1Valid}>
                 {t("next")}
                 <ArrowRight className="ml-2 h-4 w-4" />
