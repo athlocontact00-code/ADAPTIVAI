@@ -74,6 +74,7 @@ import { trackEvent } from "@/lib/actions/analytics";
 import { getCalendarMonthData } from "@/lib/actions/calendar";
 import { getFeedbackForWorkout, type FeedbackData } from "@/lib/actions/workout-feedback";
 import { decidePlanChangeProposal, getPendingProposalsForWorkout } from "@/lib/actions/plan-rigidity";
+import { finalizeDraftWorkout } from "@/lib/actions/coach-draft";
 import {
   computeMonthlySummary,
   computeWeeklySummary,
@@ -312,6 +313,18 @@ const WorkoutChip = memo(({
         {line}
       </span>
 
+      {workout.source === "AI_DRAFT" && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="secondary" className="h-4 px-1 text-[9px] leading-none">
+                DRAFT
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>Draft workout — open to Finalize or Delete.</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {adapted && (
         <TooltipProvider>
           <Tooltip>
@@ -1967,6 +1980,9 @@ export function CalendarClient({
               </div>
               {workoutDetail && (
                 <div className="flex items-center gap-2 shrink-0">
+                  {workoutDetail.source === "AI_DRAFT" && (
+                    <Badge variant="outline" className="text-[10px]">DRAFT</Badge>
+                  )}
                   <Badge variant={workoutDetail.completed ? "success" : "secondary"}>
                     {workoutDetail.completed ? "Done" : "Planned"}
                   </Badge>
@@ -1977,6 +1993,24 @@ export function CalendarClient({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {workoutDetail.source === "AI_DRAFT" && (
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            const res = await finalizeDraftWorkout(workoutDetail.id);
+                            if (res.success) {
+                              toast.success("Workout finalized");
+                              setWorkoutDetail((prev) => (prev ? { ...prev, source: "AI" } : null));
+                              setWorkouts((prev) =>
+                                prev.map((w) => (w.id === workoutDetail.id ? { ...w, source: "AI" } : w))
+                              );
+                            } else {
+                              toast.error(res.error ?? "Failed to finalize");
+                            }
+                          }}
+                        >
+                          <Check className="h-4 w-4 mr-2" /> Finalize
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => setPlanEditorOpen(true)}>
                         <Edit className="h-4 w-4 mr-2" /> Edit plan
                       </DropdownMenuItem>

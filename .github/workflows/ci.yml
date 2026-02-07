@@ -24,6 +24,7 @@ jobs:
       STRIPE_SECRET_KEY: "sk_test_dummy"
       STRIPE_WEBHOOK_SECRET: "whsec_dummy"
       STRIPE_PRICE_ID_PRO: "price_dummy"
+      STRIPE_PRICE_ID_PRO_YEAR: "price_dummy_yearly"
       STRIPE_PRODUCT_ID_PRO: "prod_dummy"
 
       # Optional / used by app
@@ -45,5 +46,5 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
-      - name: Run CI gates (lint, typecheck, build)
+      - name: Run CI gates (lint, typecheck, test, build)
         run: npm run ci

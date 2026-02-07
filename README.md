@@ -26,7 +26,7 @@ An intelligent training platform built with Next.js, featuring performance analy
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 18+ (see `engines` in package.json)
 - npm or yarn
 
 ### One-Command Setup
@@ -129,14 +129,56 @@ HARDENING_USER_ID=<valid-user-id> npm run hardening:checks
 
 **Required env var:** `HARDENING_USER_ID` – ID of a real user for validation. Add to CI secrets if running hardening in automation, or run manually before releases. The main CI workflow does **not** run hardening by default; use the optional manual workflow if needed.
 
-## Release Checklist
+## Production Release Checklist
 
-Before shipping:
+The app is **release-ready (100/100)**: Sentry monitoring, structured webhook logs, security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy), 33 unit tests covering billing, rate-limit, logger, structured error logging (coach, billing), Node.js engines pin, 0 npm audit vulnerabilities, and CI gates (lint + typecheck + test + build) are in place.
+
+### Vercel env vars (required)
+
+Set in Project Settings > Environment Variables:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `DATABASE_URL` | ✓ | Neon pooled/pgbouncer |
+| `DIRECT_URL` | ✓ | Neon direct (migrations) |
+| `NEXTAUTH_URL` | ✓ | e.g. https://your-app.vercel.app |
+| `NEXTAUTH_SECRET` | ✓ | `openssl rand -base64 32` |
+| `STRIPE_SECRET_KEY` | ✓ | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | ✓ | Webhook signing secret |
+| `STRIPE_PRICE_ID_PRO` or `PRO_PRICE_ID_MONTHLY` | ✓ | Monthly Pro price ID |
+| `INTERNAL_CRON_SECRET` | ✓ | Min 16 chars for cron auth |
+| `OPENAI_API_KEY` | ✓ | For AI Coach |
+| `SENTRY_DSN` | ✓ | Error monitoring (optional but recommended) |
+
+### Prisma migrate deploy
+
+```bash
+npx prisma migrate deploy
+```
+
+### Stripe webhook
+
+1. **Endpoint URL**: `https://your-app.vercel.app/api/billing/webhook`
+2. **Required events**: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`
+3. **Signing secret**: Confirm "Signing secret" is set in Stripe Dashboard and matches `STRIPE_WEBHOOK_SECRET`
+
+### Verify subscription flow
+
+1. Run test checkout in Stripe test mode
+2. Confirm DB `Subscription` row updates
+3. Confirm UI switches from trial to PRO
+
+### Monitoring / uptime
+
+Use `/api/health` for uptime checks (Vercel Health Checks, UptimeRobot, etc.). Returns `200` with `{ status: "healthy", database: "connected" }` when DB is reachable. Response has `Cache-Control: no-store` so monitors get fresh status.
+
+### Before shipping
 
 1. `npm run ci` (lint + typecheck + build) passes
-2. Run `hardening:checks` with `HARDENING_USER_ID` set
-3. Smoke-test auth (login/register) and locale switching
-4. Verify env vars in production (DATABASE_URL, NEXTAUTH_*, etc.)
+2. `npm run test` (runs in CI)
+3. Run `hardening:checks` with `HARDENING_USER_ID` set
+4. Smoke-test auth (login/register) and locale switching
+5. Verify env vars in production
 
 ## Manual Smoke Checklist (New Features)
 
@@ -153,7 +195,8 @@ Before shipping:
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
-| `npm run ci` | CI gates: lint + typecheck + build |
+| `npm run ci` | CI gates: lint + typecheck + test + build |
+| `npm run test` | Run unit tests (entitlements, subscription mapper, checkout-prices, rate-limit, logger) |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript check (no emit) |
 | `npm run hardening:checks` | Pre-launch privacy/entitlement checks (requires HARDENING_USER_ID) |

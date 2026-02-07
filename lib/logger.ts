@@ -42,6 +42,18 @@ export function logWarn(message: string, context: LogContext = {}) {
   log("warn", message, context);
 }
 
-export function logError(message: string, context: LogContext = {}) {
-  log("error", message, context);
+export function logError(
+  message: string,
+  context: LogContext = {},
+  err?: unknown
+) {
+  const payload = {
+    ...context,
+    ...(err instanceof Error
+      ? { errorMessage: err.message, errorStack: err.stack }
+      : err != null
+        ? { errorMessage: String(err) }
+        : {}),
+  };
+  log("error", message, payload);
 }

@@ -34,6 +34,7 @@ import { CoachContextToggles, type CoachContextPayload } from "@/components/coac
 import { HowItWorksDialog } from "@/components/coach/how-it-works-dialog";
 import { PaywallCard } from "@/components/paywall-card";
 import { sendCoachMessage } from "@/lib/actions/coach-chat";
+import { undoDraftWorkouts } from "@/lib/actions/coach-draft";
 import { SAMPLE_WORKOUT_JSON } from "@/lib/mock/coach";
 interface PlanLog {
   id: string;
@@ -426,6 +427,20 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
         if ((result as { code?: string }).code === "PAYWALL") {
           router.refresh();
         }
+      } else if (result.meta?.createdWorkoutIds?.length) {
+        const ids = result.meta.createdWorkoutIds;
+        toast.success("Added to calendar (Draft)", {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              const r = await undoDraftWorkouts(ids);
+              if (r.success && r.deleted > 0) {
+                toast.success("Removed from calendar");
+                router.refresh();
+              }
+            },
+          },
+        });
       }
     } catch {
       setMessages((prev) => {

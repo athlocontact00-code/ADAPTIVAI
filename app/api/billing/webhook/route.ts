@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
 import { syncSubscriptionFromStripe } from "@/lib/billing/stripe-sync";
+import { createRequestId, logInfo, logWarn, logError } from "@/lib/logger";
 
 function getWebhookSecret(): string {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
-    throw new Error("Missing STRIPE_WEBHOOK_SECRET");
+  if (!secret || secret.length < 10) {
+    throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
   }
   return secret;
 }
@@ -19,21 +20,37 @@ async function markProcessed(stripeEventId: string): Promise<void> {
 }
 
 export async function POST(req: Request) {
+  const requestId = createRequestId();
+  const env = process.env.NODE_ENV ?? "development";
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET.length < 10) {
+    logError("webhook.error", { requestId, env, message: "STRIPE_WEBHOOK_SECRET is not configured" });
+    return NextResponse.json(
+      { error: "Webhook configuration error" },
+      { status: 500 }
+    );
+  }
+
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) {
+    logWarn("webhook.missing_signature", { requestId, env });
+    return NextResponse.json({ error: "Missing stripe-signature" }, { status: 400 });
+  }
+
   const stripe = getStripeClient();
 
   try {
-    const signature = req.headers.get("stripe-signature");
-    if (!signature) {
-      return NextResponse.json({ error: "Missing stripe-signature" }, { status: 400 });
-    }
-
     const body = await req.text();
     const event = stripe.webhooks.constructEvent(body, signature, getWebhookSecret());
 
-    // Idempotency:
-    // - Create event record if first time
-    // - If already exists + processedAt set => no-op
-    // - If exists but processedAt null => retry allowed
+    logInfo("webhook.received", {
+      requestId,
+      env,
+      eventId: event.id,
+      eventType: event.type,
+      livemode: event.livemode,
+    });
+
     try {
       await db.stripeEvent.create({
         data: {
@@ -49,10 +66,11 @@ export async function POST(req: Request) {
       });
 
       if (existing?.processedAt) {
+        logInfo("webhook.idempotent_noop", { requestId, eventId: event.id, eventType: event.type });
         return NextResponse.json({ received: true });
       }
 
-      console.warn("[billing] Retrying previously seen event", event.id, event.type);
+      logWarn("webhook.retry", { requestId, eventId: event.id, eventType: event.type });
     }
 
     switch (event.type) {
@@ -60,7 +78,20 @@ export async function POST(req: Request) {
         const session = event.data.object as unknown as { subscription?: string | null };
         if (session.subscription) {
           const sub = await stripe.subscriptions.retrieve(session.subscription);
-          await syncSubscriptionFromStripe(sub);
+          const userId = await syncSubscriptionFromStripe(sub);
+          logInfo("webhook.processed", {
+            requestId,
+            eventId: event.id,
+            eventType: event.type,
+            userId: userId ?? null,
+          });
+        } else {
+          logInfo("webhook.processed", {
+            requestId,
+            eventId: event.id,
+            eventType: event.type,
+            note: "no subscription",
+          });
         }
         break;
       }
@@ -69,7 +100,13 @@ export async function POST(req: Request) {
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         const sub = event.data.object as unknown as import("stripe").Stripe.Subscription;
-        await syncSubscriptionFromStripe(sub);
+        const userId = await syncSubscriptionFromStripe(sub);
+        logInfo("webhook.processed", {
+          requestId,
+          eventId: event.id,
+          eventType: event.type,
+          userId: userId ?? null,
+        });
         break;
       }
 
@@ -78,19 +115,46 @@ export async function POST(req: Request) {
         const invoice = event.data.object as unknown as { subscription?: string | null };
         if (invoice.subscription) {
           const sub = await stripe.subscriptions.retrieve(invoice.subscription);
-          await syncSubscriptionFromStripe(sub);
+          const userId = await syncSubscriptionFromStripe(sub);
+          logInfo("webhook.processed", {
+            requestId,
+            eventId: event.id,
+            eventType: event.type,
+            userId: userId ?? null,
+          });
+        } else {
+          logInfo("webhook.processed", {
+            requestId,
+            eventId: event.id,
+            eventType: event.type,
+            note: "no subscription",
+          });
         }
         break;
       }
 
       default:
+        logInfo("webhook.processed", {
+          requestId,
+          eventId: event.id,
+          eventType: event.type,
+          note: "no-op",
+        });
         break;
     }
 
     await markProcessed(event.id);
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Stripe webhook error:", error);
+    logError(
+      "webhook.error",
+      {
+        requestId,
+        env,
+        message: error instanceof Error ? error.message : String(error),
+      },
+      error instanceof Error ? error : undefined
+    );
     return NextResponse.json({ error: "Webhook error" }, { status: 400 });
   }
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getEntitlements } from "@/lib/billing/entitlements";
+import { setSentryUser } from "@/lib/sentry";
 import { AppShell } from "@/components/app-shell";
 
 export default async function AppLayout({
@@ -16,6 +17,8 @@ export default async function AppLayout({
   }
 
   const userId = session.user.id!;
+  setSentryUser({ id: userId, email: session.user.email });
+
   const [user, entitlements] = await Promise.all([
     db.user.findUnique({ where: { id: userId } }),
     getEntitlements(userId),

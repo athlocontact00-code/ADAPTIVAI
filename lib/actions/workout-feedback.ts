@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { track } from "@/lib/analytics/events";
 import { createRequestId, logError, logInfo } from "@/lib/logger";
+import { updateCoachInsightsFromFeedback } from "@/lib/services/ai-memory.service";
 
 const feedbackDb = db as unknown as {
   postWorkoutFeedback: {
@@ -284,6 +285,7 @@ export async function saveFeedback(input: SaveFeedbackInput): Promise<FeedbackRe
         isEdit: true,
       });
 
+      updateCoachInsightsFromFeedback(session.user.id).catch(() => {});
       return { success: true, feedbackId: updated.id, semanticTags };
     }
 
@@ -337,6 +339,7 @@ export async function saveFeedback(input: SaveFeedbackInput): Promise<FeedbackRe
       isEdit: false,
     });
 
+    updateCoachInsightsFromFeedback(session.user.id).catch(() => {});
     return { success: true, feedbackId: feedback.id, semanticTags };
   } catch (error) {
     logError("feedback.submit.failed", {

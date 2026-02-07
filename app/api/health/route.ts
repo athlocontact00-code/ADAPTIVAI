@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { logError } from "@/lib/logger";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -43,16 +47,18 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       status: "healthy",
       timestamp: new Date().toISOString(),
       database: "connected",
       authenticated: !!session?.user?.id,
       todayReadiness: readinessData,
     });
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    return res;
   } catch (error) {
-    console.error("Health check failed:", error);
-    return NextResponse.json(
+    logError("health.check.failed", {}, error instanceof Error ? error : undefined);
+    const res = NextResponse.json(
       {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
@@ -60,5 +66,7 @@ export async function GET() {
       },
       { status: 500 }
     );
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    return res;
   }
 }

@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isProSubscriptionStatus } from "./entitlements-utils";
 
+export { isProSubscriptionStatus };
 export type Entitlements = {
   isPro: boolean;
   plan: "FREE" | "TRIAL" | "PRO";
@@ -20,17 +22,6 @@ function parseGraceDays(): number {
   if (!raw) return 3;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : 3;
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function isAccessEligibleStatus(status: string | null): boolean {
-  if (!status) return false;
-  return status === "active" || status === "trialing" || status === "past_due";
 }
 
 /**
@@ -62,20 +53,19 @@ export async function getEntitlements(userId: string): Promise<Entitlements> {
   const nowMs = now.getTime();
 
   const trialEndsAt = user?.trialEndsAt ?? null;
-  const isTrialActive = Boolean(trialEndsAt && trialEndsAt.getTime() > nowMs);
+  const trialTimeLeft = Boolean(trialEndsAt && trialEndsAt.getTime() > nowMs);
 
-  const graceDays = parseGraceDays();
-  const renewAt = sub?.currentPeriodEnd ?? (isTrialActive ? trialEndsAt : null);
-  const accessUntil =
-    renewAt && sub?.plan === "pro"
-      ? addDays(renewAt, graceDays)
-      : renewAt;
+  parseGraceDays(); // grace period config (reserved for future use)
+  const renewAt = sub?.currentPeriodEnd ?? (trialTimeLeft ? trialEndsAt : null);
 
+  // isPro from subscription: status in ["active","trialing"] AND currentPeriodEnd > now (trial only when no active sub)
   const isPaidPro = Boolean(
     sub?.plan === "pro" &&
-      isAccessEligibleStatus(sub.status) &&
-      (accessUntil ? accessUntil.getTime() > nowMs : false)
+      isProSubscriptionStatus(sub.status) &&
+      sub.currentPeriodEnd &&
+      sub.currentPeriodEnd.getTime() > nowMs
   );
+  const isTrialActive = trialTimeLeft && !isPaidPro;
 
   const plan: "FREE" | "TRIAL" | "PRO" = isPaidPro ? "PRO" : isTrialActive ? "TRIAL" : "FREE";
   const isPro = isPaidPro || isTrialActive;

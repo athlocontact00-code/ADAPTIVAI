@@ -358,6 +358,59 @@ export async function aggregateAndStoreMemory(
 }
 
 /**
+ * Update coach AI memory from recent workout feedback (preference learning).
+ * Call after PostWorkoutFeedback create/update. Idempotent; uses aggregated insights only.
+ */
+export async function updateCoachInsightsFromFeedback(userId: string): Promise<void> {
+  const feedback = await db.postWorkoutFeedback.findMany({
+    where: { userId, visibleToAI: true },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+    select: {
+      id: true,
+      enjoyment: true,
+      perceivedDifficulty: true,
+      createdAt: true,
+      workout: { select: { type: true } },
+    },
+  });
+
+  const withType = feedback.filter((f) => f.workout?.type);
+  if (withType.length < 5) return;
+
+  const forPreference = withType.map((f) => ({
+    workoutType: f.workout!.type,
+    enjoyment: f.enjoyment,
+    perceivedDifficulty: f.perceivedDifficulty ?? "MODERATE",
+  }));
+
+  const preference = calculatePreferenceProfile(forPreference);
+  if (!preference) return;
+
+  const periodEnd = withType[0]?.createdAt ?? new Date();
+  const periodStart = withType[withType.length - 1]?.createdAt ?? periodEnd;
+  const summary =
+    [
+      preference.preferredSessionTypes.length && `Enjoys: ${preference.preferredSessionTypes.join(", ")}`,
+      preference.avoidedSessionTypes.length && `Struggles with: ${preference.avoidedSessionTypes.join(", ")}`,
+      `Intensity preference: ${preference.intensityPreference}`,
+    ]
+      .filter(Boolean)
+      .join(". ") || "Training preferences from workout feedback";
+
+  await aggregateAndStoreMemory(
+    userId,
+    "PREFERENCE",
+    "Training preferences (from feedback)",
+    summary,
+    preference as unknown as Record<string, unknown>,
+    withType.length,
+    periodStart,
+    periodEnd
+  );
+}
+
+/**
  * Get AI memory summary for a user
  */
 export async function getAIMemorySummary(userId: string): Promise<AIMemorySummary> {

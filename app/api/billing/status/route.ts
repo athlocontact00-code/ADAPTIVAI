@@ -17,6 +17,7 @@ export async function GET() {
     return NextResponse.json({
       plan: ent.plan,
       isPro: ent.isPro,
+      subscriptionStatus: ent.status,
       isTrialActive: ent.isTrialActive,
       trialEndsAt: ent.trialEndsAt?.toISOString() ?? null,
       trialDaysRemaining: ent.trialDaysRemaining,

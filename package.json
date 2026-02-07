@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "ci": "npm run lint && npm run typecheck && npm run build",
+    "ci": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "hardening:checks": "npx tsx scripts/hardening-checks.ts",
     "setup": "npx prisma generate && npx prisma migrate dev --name init && npx tsx prisma/seed.ts && next dev",
     "db:generate": "npx prisma generate",
@@ -23,6 +25,7 @@
     "prisma:migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.38.0",
     "@auth/prisma-adapter": "^2.7.4",
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^6.2.1",
@@ -74,6 +77,10 @@
     "prisma": "^6.2.1",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

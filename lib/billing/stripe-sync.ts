@@ -1,30 +1,13 @@
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
+import { mapSubscriptionToUpsertData } from "./subscription-mapper";
 
-function unixSecondsToDate(value: number | null | undefined): Date | null {
-  if (!value) return null;
-  return new Date(value * 1000);
-}
-
-function getNumberField(obj: unknown, keys: string[]): number | null {
-  if (!obj || typeof obj !== "object") return null;
-  const rec = obj as Record<string, unknown>;
-  for (const k of keys) {
-    const v = rec[k];
-    if (typeof v === "number") return v;
-  }
-  return null;
-}
-
-function getBooleanField(obj: unknown, keys: string[]): boolean | null {
-  if (!obj || typeof obj !== "object") return null;
-  const rec = obj as Record<string, unknown>;
-  for (const k of keys) {
-    const v = rec[k];
-    if (typeof v === "boolean") return v;
-  }
-  return null;
-}
+const PRO_PRICE_IDS = [
+  process.env.PRO_PRICE_ID_MONTHLY,
+  process.env.PRO_PRICE_ID_YEARLY,
+  process.env.STRIPE_PRICE_ID_PRO,
+  process.env.STRIPE_PRICE_ID_PRO_YEAR,
+].filter(Boolean) as string[];
 
 const prisma = db as unknown as {
   user: {
@@ -69,23 +52,6 @@ const prisma = db as unknown as {
   };
 };
 
-const PRO_PRICE_IDS = [
-  process.env.PRO_PRICE_ID_MONTHLY,
-  process.env.PRO_PRICE_ID_YEARLY,
-  process.env.STRIPE_PRICE_ID_PRO,
-].filter(Boolean) as string[];
-
-function resolvePlanFromSubscription(sub: Stripe.Subscription): string {
-  const price = sub.items.data[0]?.price;
-  const productId = typeof price?.product === "string" ? price.product : null;
-  const priceId = price?.id ?? null;
-
-  if (priceId && PRO_PRICE_IDS.includes(priceId)) return "pro";
-  if (process.env.STRIPE_PRODUCT_ID_PRO && productId === process.env.STRIPE_PRODUCT_ID_PRO) return "pro";
-
-  return "pro";
-}
-
 async function resolveUserId(params: {
   stripeCustomerId: string;
   subscription: Stripe.Subscription;
@@ -103,7 +69,7 @@ async function resolveUserId(params: {
   return user?.id ?? null;
 }
 
-export async function syncSubscriptionFromStripe(subscription: Stripe.Subscription): Promise<void> {
+export async function syncSubscriptionFromStripe(subscription: Stripe.Subscription): Promise<string | null> {
   const stripeSubscriptionId = subscription.id;
   const stripeCustomerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
@@ -115,23 +81,14 @@ export async function syncSubscriptionFromStripe(subscription: Stripe.Subscripti
       stripeSubscriptionId,
       stripeCustomerId
     );
-    return;
+    return null;
   }
 
-  const price = subscription.items.data[0]?.price;
-  const stripePriceId = price?.id ?? null;
-  const stripeProductId =
-    typeof price?.product === "string" ? price.product : price?.product?.id ?? null;
-
-  const plan = resolvePlanFromSubscription(subscription);
-
-  const currentPeriodStartUnix = getNumberField(subscription, ["current_period_start", "currentPeriodStart"]);
-  const currentPeriodEndUnix = getNumberField(subscription, ["current_period_end", "currentPeriodEnd"]);
-  const canceledAtUnix = getNumberField(subscription, ["canceled_at", "canceledAt"]);
-  const endedAtUnix = getNumberField(subscription, ["ended_at", "endedAt"]);
-  const trialEndUnix = getNumberField(subscription, ["trial_end", "trialEnd"]);
-  const cancelAtPeriodEnd =
-    getBooleanField(subscription, ["cancel_at_period_end", "cancelAtPeriodEnd"]) ?? false;
+  const mapped = mapSubscriptionToUpsertData(
+    subscription,
+    PRO_PRICE_IDS,
+    process.env.STRIPE_PRODUCT_ID_PRO ?? undefined
+  );
 
   await prisma.user.update({
     where: { id: userId },
@@ -142,31 +99,32 @@ export async function syncSubscriptionFromStripe(subscription: Stripe.Subscripti
     where: { stripeSubscriptionId },
     create: {
       userId,
-      plan,
-      status: subscription.status,
+      plan: mapped.plan,
+      status: mapped.status,
       stripeCustomerId,
       stripeSubscriptionId,
-      stripePriceId,
-      stripeProductId,
-      currentPeriodStart: unixSecondsToDate(currentPeriodStartUnix),
-      currentPeriodEnd: unixSecondsToDate(currentPeriodEndUnix),
-      cancelAtPeriodEnd,
-      canceledAt: unixSecondsToDate(canceledAtUnix),
-      endedAt: unixSecondsToDate(endedAtUnix),
-      trialEnd: unixSecondsToDate(trialEndUnix),
+      stripePriceId: mapped.stripePriceId,
+      stripeProductId: mapped.stripeProductId,
+      currentPeriodStart: mapped.currentPeriodStart,
+      currentPeriodEnd: mapped.currentPeriodEnd,
+      cancelAtPeriodEnd: mapped.cancelAtPeriodEnd,
+      canceledAt: mapped.canceledAt,
+      endedAt: mapped.endedAt,
+      trialEnd: mapped.trialEnd,
     },
     update: {
-      plan,
-      status: subscription.status,
+      plan: mapped.plan,
+      status: mapped.status,
       stripeCustomerId,
-      stripePriceId,
-      stripeProductId,
-      currentPeriodStart: unixSecondsToDate(currentPeriodStartUnix),
-      currentPeriodEnd: unixSecondsToDate(currentPeriodEndUnix),
-      cancelAtPeriodEnd,
-      canceledAt: unixSecondsToDate(canceledAtUnix),
-      endedAt: unixSecondsToDate(endedAtUnix),
-      trialEnd: unixSecondsToDate(trialEndUnix),
+      stripePriceId: mapped.stripePriceId,
+      stripeProductId: mapped.stripeProductId,
+      currentPeriodStart: mapped.currentPeriodStart,
+      currentPeriodEnd: mapped.currentPeriodEnd,
+      cancelAtPeriodEnd: mapped.cancelAtPeriodEnd,
+      canceledAt: mapped.canceledAt,
+      endedAt: mapped.endedAt,
+      trialEnd: mapped.trialEnd,
     },
   });
+  return userId;
 }

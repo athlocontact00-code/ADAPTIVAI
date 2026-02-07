@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { createRequestId, logError } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
 import { ensureStripeCustomerForUser } from "@/lib/billing/stripe-customer";
+import { getProPriceIdForPlan } from "@/lib/billing/checkout-prices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +13,7 @@ export const dynamic = "force-dynamic";
 const bodySchema = z
   .object({
     priceId: z.string().min(1).optional(),
+    plan: z.enum(["month", "year"]).optional(),
   })
   .optional();
 
@@ -20,22 +23,13 @@ function getAppUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-const ALLOWED_PRICE_IDS = [
-  process.env.PRO_PRICE_ID_MONTHLY,
-  process.env.PRO_PRICE_ID_YEARLY,
-  process.env.STRIPE_PRICE_ID_PRO,
-].filter(Boolean) as string[];
-
-function getProPriceId(input?: string): string {
-  const defaultId = process.env.PRO_PRICE_ID_MONTHLY ?? process.env.STRIPE_PRICE_ID_PRO;
-  const candidate = input ?? defaultId;
-  if (!candidate) {
-    throw new Error("Missing PRO_PRICE_ID_MONTHLY or STRIPE_PRICE_ID_PRO (or priceId in request)");
-  }
-  if (ALLOWED_PRICE_IDS.length > 0 && !ALLOWED_PRICE_IDS.includes(candidate)) {
-    throw new Error("Invalid priceId");
-  }
-  return candidate;
+function getPriceId(plan: "month" | "year", explicitPriceId?: string): string {
+  return getProPriceIdForPlan(plan, explicitPriceId, {
+    PRO_PRICE_ID_MONTHLY: process.env.PRO_PRICE_ID_MONTHLY,
+    PRO_PRICE_ID_YEARLY: process.env.PRO_PRICE_ID_YEARLY,
+    STRIPE_PRICE_ID_PRO: process.env.STRIPE_PRICE_ID_PRO,
+    STRIPE_PRICE_ID_PRO_YEAR: process.env.STRIPE_PRICE_ID_PRO_YEAR,
+  });
 }
 
 function errorToResponse(error: unknown): NextResponse {
@@ -44,6 +38,7 @@ function errorToResponse(error: unknown): NextResponse {
   if (
     message.includes("Missing PRO_PRICE_ID_MONTHLY") ||
     message.includes("Missing STRIPE_PRICE_ID_PRO") ||
+    message.includes("Missing STRIPE_PRICE_ID_PRO_YEAR") ||
     message.includes("Invalid priceId")
   ) {
     return NextResponse.json({ error: message }, { status: 400 });
@@ -76,7 +71,8 @@ export async function POST(req: Request) {
     }
 
     const parsedBody = bodySchema.parse(await req.json().catch(() => undefined));
-    const priceId = getProPriceId(parsedBody?.priceId);
+    const plan = parsedBody?.plan ?? "month";
+    const priceId = getPriceId(plan, parsedBody?.priceId);
 
     const stripe = getStripeClient();
 
@@ -106,7 +102,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: checkout.url });
   } catch (error) {
-    console.error("Create checkout session error:", error);
+    logError("billing.checkout.error", { requestId: createRequestId() }, error instanceof Error ? error : undefined);
     return errorToResponse(error);
   }
 }

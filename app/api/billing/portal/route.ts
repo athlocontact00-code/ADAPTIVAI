@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createRequestId, logError } from "@/lib/logger";
 import { getStripeClient } from "@/lib/stripe";
 import { ensureStripeCustomerForUser } from "@/lib/billing/stripe-customer";
 
@@ -42,7 +43,7 @@ export async function POST() {
 
     return NextResponse.json({ url: portal.url });
   } catch (error) {
-    console.error("Create billing portal session error:", error);
+    logError("billing.portal.error", { requestId: createRequestId() }, error instanceof Error ? error : undefined);
     const message =
       error instanceof Error ? error.message : "Failed to create billing portal session";
     const isConfigError =

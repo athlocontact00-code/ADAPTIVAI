@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import {
@@ -9,6 +9,7 @@ import {
   User,
   Heart,
   Brain,
+  Bot,
   CreditCard,
   Target,
   Briefcase,
@@ -28,6 +29,11 @@ import {
   updatePlanRigidity,
   type PlanRigiditySetting,
 } from "@/lib/actions/plan-rigidity";
+import {
+  getCoachCalendarSettings,
+  updateCoachCalendarSettings,
+  type CoachCalendarSettings,
+} from "@/lib/actions/coach-draft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -148,12 +154,15 @@ const INITIAL_BENCHMARKS = {
 export default function SettingsPage() {
   const t = useTranslations("settings");
   const tCommon = useTranslations("common");
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("profile");
   const [profile, setProfile] = useState(INITIAL_PROFILE);
   const [zones, setZones] = useState(INITIAL_ZONES);
   const [benchmarks, setBenchmarks] = useState(INITIAL_BENCHMARKS);
   const [explainLevel, setExplainLevel] = useState<"minimal" | "standard" | "deep">("standard");
+  const [coachDetailLevel, setCoachDetailLevel] = useState<CoachCalendarSettings["detailLevel"]>("detailed");
+  const [coachAutoAddToCalendar, setCoachAutoAddToCalendar] = useState<CoachCalendarSettings["autoAddToCalendar"]>("draft");
   const [identityMode, setIdentityMode] = useState<
     "competitive" | "longevity" | "comeback" | "busy_pro"
   >("competitive");
@@ -165,6 +174,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState<"month" | "year">("month");
   const [planInfo, setPlanInfo] = useState<{
     name: string;
     status: string;
@@ -226,6 +236,25 @@ export default function SettingsPage() {
     setZoneErrors(null);
     setProfileErrors({});
   }, [initialProfile, initialZones, initialBenchmarks, initialAvailability, initialPreferences, initialGuardrails]);
+
+  useEffect(() => {
+    const checkoutSuccess = searchParams.get("checkout") === "success";
+    if (checkoutSuccess) {
+      setActiveTab("billing");
+      router.refresh();
+      const refetchPlan = () =>
+        fetch("/api/profile")
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.plan) setPlanInfo(data.plan);
+          })
+          .catch(() => {});
+      refetchPlan();
+      const t = setTimeout(refetchPlan, 1500);
+      window.history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
+      return () => clearTimeout(t);
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -311,6 +340,12 @@ export default function SettingsPage() {
     getExplainLevel().then(setExplainLevel);
     getIdentityMode().then((m) => setIdentityMode(m as typeof identityMode));
     getPlanRigidity().then(setPlanRigidity);
+    getCoachCalendarSettings().then((s) => {
+      if (s) {
+        setCoachDetailLevel(s.detailLevel);
+        setCoachAutoAddToCalendar(s.autoAddToCalendar);
+      }
+    });
   }, []);
 
   async function saveProfile() {
@@ -501,7 +536,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ plan: checkoutPlan }),
       });
       const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
       if (!res.ok) {
@@ -1397,6 +1432,55 @@ export default function SettingsPage() {
                 </SettingsSectionCard>
 
                 <SettingsSectionCard
+                  title="AI Coach"
+                  icon={Bot}
+                  description="Workout generation and calendar"
+                >
+                  <div className="space-y-4">
+                    <SettingsField label="Workout detail level" hint="Coach always generates full sessions; this affects how much extra explanation is included">
+                      <Select
+                        value={coachDetailLevel}
+                        onValueChange={async (v) => {
+                          const val = v as CoachCalendarSettings["detailLevel"];
+                          setCoachDetailLevel(val);
+                          const r = await updateCoachCalendarSettings({ detailLevel: val });
+                          if (r.success) toast.success("Saved");
+                          else toast.error(r.error);
+                        }}
+                      >
+                        <SelectTrigger className={INPUT_CLASS}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="minimal">Minimal</SelectItem>
+                          <SelectItem value="detailed">Detailed (default)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsField>
+                    <SettingsField label="Auto-add to calendar" hint="When the coach prescribes a workout, add it automatically">
+                      <Select
+                        value={coachAutoAddToCalendar}
+                        onValueChange={async (v) => {
+                          const val = v as CoachCalendarSettings["autoAddToCalendar"];
+                          setCoachAutoAddToCalendar(val);
+                          const r = await updateCoachCalendarSettings({ autoAddToCalendar: val });
+                          if (r.success) toast.success("Saved");
+                          else toast.error(r.error);
+                        }}
+                      >
+                        <SelectTrigger className={INPUT_CLASS}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="off">Off</SelectItem>
+                          <SelectItem value="draft">Draft (default)</SelectItem>
+                          <SelectItem value="final">Final</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsField>
+                    <p className="text-[11px] text-muted-foreground">
+                      Draft: workouts appear on the calendar as drafts; you can Finalize or Undo. Final: add as confirmed.
+                    </p>
+                  </div>
+                </SettingsSectionCard>
+
+                <SettingsSectionCard
                   title="Notifications"
                   icon={Bell}
                   description="Daily reminders and alerts"
@@ -1486,13 +1570,37 @@ export default function SettingsPage() {
                         {isOpeningPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manage billing"}
                       </Button>
                     ) : (
-                      <Button
-                        onClick={openCheckout}
-                        disabled={isStartingCheckout}
-                        className="w-full rounded-[12px]"
-                      >
-                        {isStartingCheckout ? <Loader2 className="h-4 w-4 animate-spin" /> : "Upgrade to Pro"}
-                      </Button>
+                      <>
+                        <div className="flex rounded-[10px] border border-white/[0.08] p-0.5 bg-white/[0.02]">
+                          <button
+                            type="button"
+                            onClick={() => setCheckoutPlan("month")}
+                            className={cn(
+                              "flex-1 rounded-md py-2 text-sm font-medium transition-colors",
+                              checkoutPlan === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            Monthly
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCheckoutPlan("year")}
+                            className={cn(
+                              "flex-1 rounded-md py-2 text-sm font-medium transition-colors",
+                              checkoutPlan === "year" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            Yearly
+                          </button>
+                        </div>
+                        <Button
+                          onClick={openCheckout}
+                          disabled={isStartingCheckout}
+                          className="w-full rounded-[12px]"
+                        >
+                          {isStartingCheckout ? <Loader2 className="h-4 w-4 animate-spin" /> : "Upgrade to Pro"}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </SettingsSectionCard>

@@ -23,6 +23,14 @@ import {
 } from "@/lib/actions/coach";
 import { isWorkoutLocked, type PlanRigiditySetting } from "@/lib/services/plan-rigidity.service";
 import { createPlanChangeProposal, type ProposalPatch } from "@/lib/actions/plan-rigidity";
+import { parseCalendarInsertFromResponse } from "@/lib/schemas/coach-calendar-insert";
+import {
+  getCoachCalendarSettings,
+  insertDraftWorkoutsFromCalendarJson,
+} from "@/lib/actions/coach-draft";
+import { generateAndSaveWorkout } from "@/lib/services/coach-brain";
+import { getAIMemoryContextForPrompt } from "@/lib/services/ai-memory.service";
+import { logError } from "@/lib/logger";
 
 export type CoachContextOverrides = {
   useCheckInData?: boolean;
@@ -47,6 +55,8 @@ export type SendCoachMessageResult =
         tone: ToneMode;
         isPro: boolean;
         limit: { daily: number; remaining: number };
+        /** When coach auto-added workouts as draft, IDs for Undo. */
+        createdWorkoutIds?: string[];
       };
     }
   | {
@@ -710,6 +720,38 @@ export async function sendCoachMessage(input: SendCoachMessageInput): Promise<Se
   const context = await buildAIContextForUser(userId);
   const tone = getCoachToneFromPreference(context.userProfile.tonePreference) as ToneMode;
   const planRigidity = parsePlanRigidity(context.userProfile.planRigidity);
+  const coachSettings = await getCoachCalendarSettings();
+
+  // Unified coach brain: single-workout request → generate + adapt + save idempotently
+  const brainResult = await generateAndSaveWorkout(userId, message, {
+    addToCalendar: coachSettings?.autoAddToCalendar !== "off",
+    explainLevel: (context.userProfile.explainLevel as "minimal" | "standard" | "deep") ?? "standard",
+    source: coachSettings?.autoAddToCalendar === "draft" ? "AI_DRAFT" : "AI",
+  });
+  if (brainResult.success && brainResult.markdown) {
+    const usedLLM = false;
+    const confidence = 90;
+    let text = brainResult.markdown;
+    if (brainResult.warnings?.length) {
+      text += "\n\n⚠️ " + brainResult.warnings.join(" ");
+    }
+    if (brainResult.workoutId != null) {
+      text = `✅ Added to calendar${brainResult.title ? `: **${brainResult.title}**` : ""}\n\n${text}`;
+    }
+    await logCoachMessageUsage({ userId, usedLLM, confidence });
+    return {
+      ok: true,
+      text,
+      meta: {
+        usedLLM,
+        confidence,
+        tone,
+        isPro: ent.isPro,
+        limit: { daily: dailyLimit, remaining: remaining - 1 },
+        ...(brainResult.createdWorkoutIds?.length ? { createdWorkoutIds: brainResult.createdWorkoutIds } : {}),
+      },
+    };
+  }
 
   if (isAddWorkoutRequest(message)) {
     const now = new Date();
@@ -897,7 +939,7 @@ ${created.descriptionMd}`;
         },
       };
     } catch (error) {
-      console.error("[coach] Plan generation failed:", error);
+      logError("coach.plan_generation.failed", { userId }, error instanceof Error ? error : undefined);
       return {
         ok: false,
         code: "LLM_ERROR",
@@ -907,17 +949,26 @@ ${created.descriptionMd}`;
     }
   }
 
-  const systemPrompt = buildCoachSystemPrompt({ tone, planRigidity });
+  const systemPrompt = buildCoachSystemPrompt({
+    tone,
+    planRigidity,
+    coachDetailLevel: coachSettings?.detailLevel,
+  });
   let userPrompt = buildCoachUserPrompt({ input: message, context });
   const overrides = input.contextOverrides;
   if (overrides) {
     const pre = `Context preferences: useCheckIn=${overrides.useCheckInData !== false}, useDiary=${overrides.useDiaryNotes === true}, useSeasonGoals=${overrides.useSeasonGoals !== false}, timeBudgetHours=${overrides.timeBudgetHours ?? "profile"}\n\n`;
     userPrompt = pre + userPrompt;
   }
+  const aimemoryContext = await getAIMemoryContextForPrompt(userId);
+  if (aimemoryContext && aimemoryContext.trim().length > 0) {
+    userPrompt = userPrompt + "\n\n" + aimemoryContext;
+  }
 
   let usedLLM = false;
   let text: string;
   let confidence = 70;
+  let createdWorkoutIds: string[] | undefined;
 
   try {
     const llmText = await callOpenAIChat({
@@ -942,8 +993,19 @@ ${created.descriptionMd}`;
     if (confidence < 70 && !alreadyAdmitsUncertainty) {
       text = `${text}\n\nI'm not entirely sure — my confidence is around ${confidence}%.`;
     }
+
+    // Auto-add to calendar as draft/final when AI returns calendarInsert JSON
+    const calendarPayload = parseCalendarInsertFromResponse(text);
+    if (calendarPayload && calendarPayload.items.length > 0 && coachSettings?.autoAddToCalendar && coachSettings.autoAddToCalendar !== "off") {
+      const insertResult = await insertDraftWorkoutsFromCalendarJson(calendarPayload, {
+        forceMode: coachSettings.autoAddToCalendar,
+      });
+      if (insertResult.success && insertResult.createdIds.length > 0) {
+        createdWorkoutIds = insertResult.createdIds;
+      }
+    }
   } catch (error) {
-    console.error("[coach] OpenAI call failed; falling back:", error);
+    logError("coach.openai.failed", { userId }, error instanceof Error ? error : undefined);
 
     if (isOpenAIQuotaError(error)) {
       const usedLLM = false;
@@ -1001,6 +1063,7 @@ ${created.descriptionMd}`;
       tone,
       isPro: ent.isPro,
       limit: { daily: dailyLimit, remaining: remaining - 1 },
+      ...(createdWorkoutIds && createdWorkoutIds.length > 0 ? { createdWorkoutIds } : {}),
     },
   };
 }
