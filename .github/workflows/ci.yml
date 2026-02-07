@@ -10,26 +10,21 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     env:
-      # CI DATABASE: dummy Postgres to satisfy env validation
-      DATABASE_URL: "postgresql://user:pass@localhost:5432/db?schema=public"
-      DIRECT_URL: "postgresql://user:pass@localhost:5432/db?schema=public"
-
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
       NEXTAUTH_URL: "http://localhost:3000"
-      NEXTAUTH_SECRET: "ci-nextauth-secret-min-32-chars-xxxxxxxxxxxxxxxx"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
 
-      # Required in production by your env validation, set a safe CI fallback
-      INTERNAL_CRON_SECRET: "ci-internal-cron-secret-xxxxxxxxxxxxxxxx"
+      # Stripe (mogą być puste w CI jeśli nie są walidowane jako required)
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
 
-      # Stripe (safe dummy values for CI build-time validation)
-      STRIPE_SECRET_KEY: "sk_test_dummy"
-      STRIPE_WEBHOOK_SECRET: "whsec_dummy"
-      STRIPE_PRICE_ID_PRO: "price_dummy"
-      STRIPE_PRICE_ID_PRO_YEAR: "price_dummy_yearly"
-      STRIPE_PRODUCT_ID_PRO: "prod_dummy"
-
-      # Optional / used by app
-      APP_URL: "http://localhost:3000"
-      OPENAI_API_KEY: "sk-dummy"
+      # 🔥 FIX: długi dummy fallback, żeby walidacja przeszła
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,5 +41,7 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
+      - name: Run CI gates (lint, typecheck, build)
+        run: npm run ci
       - name: Run CI gates (lint, typecheck, test, build)
         run: npm run ci
