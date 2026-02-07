@@ -1,5 +1,3 @@
-import { env } from "@/lib/env";
-
 export type CronAuthResult =
   | { ok: true }
   | { ok: false; reason: "MISSING" | "INVALID" };
@@ -22,5 +20,5 @@ export function verifyCronSecretFromRequest(req: Request): CronAuthResult {
 
 export function isCronConfigured(): boolean {
   const configured = process.env.INTERNAL_CRON_SECRET;
-  return !!configured && configured.length >= 16 && env.NODE_ENV !== "test";
+  return !!configured && configured.length >= 16 && process.env.NODE_ENV !== "test";
 }

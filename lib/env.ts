@@ -99,14 +99,28 @@ function validateEnv(): Env {
   return parsed.data;
 }
 
-export const env = validateEnv();
+let _env: Env | null = null;
+
+function getEnv(): Env {
+  if (_env === null) {
+    _env = validateEnv();
+  }
+  return _env;
+}
+
+/** Lazily validated env; validation runs on first access, not at import time (avoids build failures). */
+export const env: Env = new Proxy({} as Env, {
+  get(_, prop: string) {
+    return getEnv()[prop as keyof Env];
+  },
+});
 
 export function isProduction(): boolean {
-  return env.NODE_ENV === "production";
+  return getEnv().NODE_ENV === "production";
 }
 
 export function isDevelopment(): boolean {
-  return env.NODE_ENV === "development";
+  return getEnv().NODE_ENV === "development";
 }
 
 /** @deprecated Project uses PostgreSQL only; kept for compatibility. */
@@ -115,5 +129,6 @@ export function isSQLite(): boolean {
 }
 
 export function isPostgres(): boolean {
-  return env.DATABASE_URL.startsWith("postgresql://") || env.DATABASE_URL.startsWith("postgres://");
+  const url = getEnv().DATABASE_URL;
+  return url.startsWith("postgresql://") || url.startsWith("postgres://");
 }
