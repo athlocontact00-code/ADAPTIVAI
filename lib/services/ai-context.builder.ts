@@ -21,6 +21,10 @@ export type AIContext = {
     heightCm: number | null;
     sportPrimary: string | null;
     experienceLevel: string | null;
+    /** Swim level for pool sessions: beginner | age_group | advanced. From preferences. */
+    swimLevel: string | null;
+    /** Include result template in calendar block (default true). From preferences. */
+    coachIncludeResultTemplate: boolean;
     planRigidity: string | null;
     equipmentNotes: string | null;
     terrainNotes: string | null;
@@ -639,6 +643,8 @@ export async function buildAIContextForUser(userId: string): Promise<AIContext> 
       heightCm: typeof profile?.height === "number" ? profile.height : null,
       sportPrimary: profile?.sportPrimary ?? null,
       experienceLevel: profile?.experienceLevel ?? null,
+      swimLevel: (profile?.preferences as Record<string, unknown> | null)?.swimLevel as string | undefined ?? null,
+      coachIncludeResultTemplate: (profile?.preferences as Record<string, unknown> | null)?.coachIncludeResultTemplate !== false,
       planRigidity: profile?.planRigidity ?? null,
       equipmentNotes: profile?.equipmentNotes ?? null,
       terrainNotes: profile?.terrainNotes ?? null,

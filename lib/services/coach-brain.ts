@@ -259,8 +259,12 @@ export function generateRubricPrescription(
       : undefined;
 
   const variantA = "Ideal day: full duration and target intensity.";
-  const variantB = "Low-energy day: reduce main set by 20% or swap to easy effort only.";
+  const variantB =
+    sport === "SWIM"
+      ? "Option B (shorter): reduce to ~70% total meters; keep warm-up and cool-down, shorten main set."
+      : "Low-energy day: reduce main set by 20% or swap to easy effort only.";
 
+  const progressionNote = getBeginnerProgressionNote(sport, experienceLevel, context);
   return {
     sport,
     date,
@@ -276,9 +280,54 @@ export function generateRubricPrescription(
     variantA,
     variantB,
     successCriteria: "You stayed within target zones/RPE and completed warm-up and cool-down.",
+    progressionNote: progressionNote ?? undefined,
     rationale,
     why,
   };
+}
+
+/** Beginner/developing: phase 1 = week 1–2, 2 = week 3–4, 3 = week 5–6. Based on sessions of this sport in last 14 days. */
+function getBeginnerPhase(sport: RubricSport, context: CoachBrainContext): 1 | 2 | 3 {
+  const typeUpper = sport.toUpperCase();
+  const count = context.recentWorkouts.filter(
+    (w) => (w.type?.toUpperCase() ?? "") === typeUpper
+  ).length;
+  if (count <= 2) return 1;
+  if (count <= 5) return 2;
+  return 3;
+}
+
+function getBeginnerProgressionNote(
+  sport: RubricSport,
+  experienceLevel: string,
+  context: CoachBrainContext
+): string | null {
+  const isBeginner =
+    /beginner|novice|new/i.test(experienceLevel) ||
+    context.recentWorkouts.filter((w) => (w.type?.toUpperCase() ?? "") === sport.toUpperCase()).length <= 1;
+  if (!isBeginner) return null;
+  const phase = getBeginnerPhase(sport, context);
+  if (sport === "SWIM") {
+    if (phase === 1) return "Progression (Week 1–2): technique + consistent easy volume; next week add one steady set.";
+    if (phase === 2) return "Progression (Week 3–4): add one quality-light session; slightly longer main set.";
+    return "Progression (Week 5–6): introduce tempo-lite sets if readiness OK; keep 70–85% easy.";
+  }
+  if (sport === "RUN") {
+    if (phase === 1) return "Progression (Week 1–2): easy run/walk + strides; next add steady blocks.";
+    if (phase === 2) return "Progression (Week 3–4): add 2×8 min steady @ RPE 5 once per week.";
+    return "Progression (Week 5–6): add light threshold only if no soreness.";
+  }
+  if (sport === "BIKE") {
+    if (phase === 1) return "Progression (Week 1–2): easy endurance + cadence drills.";
+    if (phase === 2) return "Progression (Week 3–4): add 3×8 min steady @ RPE 5.";
+    return "Progression (Week 5–6): add 2×12 min tempo @ RPE 6, no all-out.";
+  }
+  if (sport === "STRENGTH") {
+    if (phase === 1) return "Progression (Week 1–2): technique + posterior chain + core.";
+    if (phase === 2) return "Progression (Week 3–4): add 1 set or +2 reps where comfortable.";
+    return "Progression (Week 5–6): add unilateral stability if pain-free.";
+  }
+  return null;
 }
 
 function buildBlocksBySport(
@@ -368,24 +417,63 @@ function buildBlocksBySport(
 
   if (sport === "SWIM") {
     const poolLen = context.aiContext.userProfile.swimPoolLengthM ?? 25;
+    const swimLevel = (context.aiContext.userProfile.swimLevel as string) || "age_group";
+    // Meter ranges: beginner 800–1600, age_group 1600–2800, advanced 2500–4000, expert 3500–5500+
+    const totalRange =
+      swimLevel === "beginner"
+        ? { min: 800, max: 1600 }
+        : swimLevel === "advanced"
+          ? { min: 2500, max: 4000 }
+          : swimLevel === "expert"
+            ? { min: 3500, max: 5500 }
+            : { min: 1600, max: 2800 };
+    const totalMeters = Math.min(
+      totalRange.max,
+      Math.max(totalRange.min, Math.round((mainMin * 40) / 5) * 5)
+    );
+    const warmupM = swimLevel === "beginner" ? 200 : swimLevel === "advanced" || swimLevel === "expert" ? 400 : 300;
+    const warmup1M = Math.min(poolLen * 2, 100);
+    const warmup2M = swimLevel === "beginner" ? 150 : 200; // 3x50 beginner, 4x50 else
+    const warmup3M = Math.max(0, warmupM - warmup1M - warmup2M);
+    const mainM = totalMeters - warmupM - 100;
+    const cooldownM = 100;
+
     return {
-      title: "Technique & Endurance Swim",
-      goal: "Stroke efficiency and aerobic capacity.",
+      title:
+        swimLevel === "beginner"
+          ? "Technique-Focus Swim"
+          : swimLevel === "expert"
+            ? "Structured Swim"
+            : "Technique & Endurance Swim",
+      goal:
+        swimLevel === "beginner"
+          ? "Stroke efficiency and comfort in the water."
+          : swimLevel === "expert"
+            ? "Sustained aerobic and threshold work with minimal rest."
+            : "Stroke efficiency and aerobic capacity.",
       warmup: [
-        { description: `${poolLen * 2}m easy swim`, durationMin: 3 },
-        { description: "Drills: 4x50m (e.g. catch-up, fist)", durationMin: 5 },
-        { description: "Build to steady", durationMin: warmupMin - 8 },
+        { description: `${warmup1M}m easy swim`, durationMin: 2, distanceM: warmup1M },
+        {
+          description:
+            swimLevel === "beginner"
+              ? "Drills: 3x50m (e.g. catch-up, fist)"
+              : "Drills: 4x50m (e.g. catch-up, fist)",
+          durationMin: 5,
+          distanceM: warmup2M,
+        },
+        { description: warmup3M > 0 ? `${warmup3M}m build to steady` : "Build to steady", durationMin: warmupMin - 7, distanceM: warmup3M },
       ],
       main: [
         {
-          description: `Steady swim, focus on form. ${poolLen}m pool: count laps.`,
+          description: `Main set: ${mainM}m steady, focus on form. ${poolLen}m pool: count laps.`,
           durationMin: mainMin,
+          distanceM: mainM,
           intensityTarget: { rpe, zone: "Z2" },
         },
       ],
       cooldown: [
-        { description: "Easy 100m", durationMin: 2 },
-        { description: "Stretch shoulders", durationMin: cooldownMin - 2 },
+        { description: "Easy 100m", durationMin: 2, distanceM: 100 },
+        { description: "Stretch shoulders", durationMin: Math.max(0, cooldownMin - 2) },
       ],
       techniqueCues: ["High elbow catch", "Rotate from hips", "Breathe bilaterally", "Relaxed kick"],
       intensityTargets: { rpe, pace: "per 100m comfortable" },
@@ -496,18 +584,57 @@ export function validateGuardrails(
 }
 
 /**
+ * Build RESULT TEMPLATE section (compact) for calendar block. Sport-specific fields.
+ */
+function buildResultTemplateSection(sport: RubricSport): string[] {
+  const lines: string[] = [];
+  lines.push("### RESULT TEMPLATE (optional)");
+  lines.push("- Completed? (Y/N):");
+  lines.push("- Actual duration:");
+  lines.push("- Actual distance:");
+  lines.push("- Avg HR (optional):");
+  lines.push("- RPE (1–10):");
+  lines.push("- Feeling (great/good/ok/tired/bad):");
+  lines.push("- Legs (fresh/normal/heavy/sore):");
+  lines.push("- Notes (1 line):");
+  if (sport === "SWIM") {
+    lines.push("- Pool length (25/50):");
+    lines.push("- Main set pace (sec/100m) OR best 100 split:");
+  } else if (sport === "BIKE") {
+    lines.push("- Avg power (W) OR NP (optional) OR avg speed:");
+  } else if (sport === "RUN") {
+    lines.push("- Avg pace (min/km) OR best 1km split:");
+  } else if (sport === "STRENGTH") {
+    lines.push("- Completed sets/reps? + load (optional):");
+  }
+  return lines;
+}
+
+/**
  * Format prescription as markdown for user (explainLevel: minimal | standard | deep).
  */
 export function formatPrescriptionMarkdown(
   prescription: WorkoutRubricPrescription,
-  explainLevel: "minimal" | "standard" | "deep"
+  explainLevel: "minimal" | "standard" | "deep",
+  options?: { includeResultTemplate?: boolean }
 ): string {
   const lines: string[] = [];
   lines.push(`## ${prescription.title}`);
   lines.push("");
   lines.push(`**Goal:** ${prescription.goal}`);
   lines.push(`**Duration:** ${prescription.durationMin} min`);
-  lines.push("");
+  const totalMeters =
+    prescription.sport === "SWIM"
+      ? [...prescription.warmup, ...prescription.main, ...prescription.cooldown].reduce(
+          (sum, s) => sum + (s.distanceM ?? 0),
+          0
+        )
+      : 0;
+  if (totalMeters > 0) {
+    lines.push(`**TOTAL METERS:** ${totalMeters}`);
+    lines.push(`**Total:** ${prescription.durationMin} min / ~${totalMeters}m`);
+    lines.push("");
+  }
 
   if (explainLevel !== "minimal") {
     lines.push("### Why");
@@ -562,8 +689,19 @@ export function formatPrescriptionMarkdown(
   lines.push("### Variants");
   lines.push(`- **A (ideal):** ${prescription.variantA ?? "Full session."}`);
   lines.push(`- **B (low energy):** ${prescription.variantB ?? "Reduce volume."}`);
+  if (prescription.progressionNote) {
+    lines.push("");
+    lines.push(`**Progression note:** ${prescription.progressionNote}`);
+  }
   lines.push("");
   lines.push("**Success criteria:** " + (prescription.successCriteria ?? "Complete warm-up, main set, and cool-down within targets."));
+  lines.push("");
+  lines.push("*Post-workout: log total time, avg pace/speed, RPE, legs.*");
+  if (options?.includeResultTemplate !== false) {
+    lines.push("");
+    lines.push("");
+    buildResultTemplateSection(prescription.sport).forEach((l) => lines.push(l));
+  }
   lines.push("");
   lines.push("---");
   lines.push("*Today's win: complete this session and note how you feel.*");
@@ -579,11 +717,16 @@ function sportToType(sport: RubricSport): string {
 /**
  * Convert rubric to calendar-insert item (descriptionMd + prescriptionJson).
  */
-function rubricToCalendarItemInternal(prescription: WorkoutRubricPrescription): {
+function rubricToCalendarItemInternal(
+  prescription: WorkoutRubricPrescription,
+  opts?: { includeResultTemplate?: boolean }
+): {
   descriptionMd: string;
   prescriptionJson: Record<string, unknown>;
 } {
-  const descriptionMd = formatPrescriptionMarkdown(prescription, "standard");
+  const descriptionMd = formatPrescriptionMarkdown(prescription, "standard", {
+    includeResultTemplate: opts?.includeResultTemplate !== false,
+  });
   const prescriptionJson = {
     version: 2,
     objective: prescription.goal,
@@ -632,7 +775,7 @@ function rubricToCalendarItemInternal(prescription: WorkoutRubricPrescription): 
 export async function saveWorkoutIdempotent(
   userId: string,
   prescription: WorkoutRubricPrescription,
-  options: { createSeparate?: boolean; source?: string } = {}
+  options: { createSeparate?: boolean; source?: string; includeResultTemplate?: boolean } = {}
 ): Promise<{ workoutId: string; created: boolean }> {
   const date = parseDateToLocalNoon(prescription.date);
   const type = sportToType(prescription.sport);
@@ -649,8 +792,17 @@ export async function saveWorkoutIdempotent(
     select: { id: true },
   });
 
-  const item = rubricToCalendarItemInternal(prescription);
+  const item = rubricToCalendarItemInternal(prescription, {
+    includeResultTemplate: options.includeResultTemplate !== false,
+  });
   const source = options.source ?? "AI";
+  const distanceM =
+    prescription.sport === "SWIM"
+      ? [...prescription.warmup, ...prescription.main, ...prescription.cooldown].reduce(
+          (sum, s) => sum + (s.distanceM ?? 0),
+          0
+        ) || undefined
+      : undefined;
 
   if (existing && !options.createSeparate) {
     await db.workout.update({
@@ -658,6 +810,7 @@ export async function saveWorkoutIdempotent(
       data: {
         title: prescription.title,
         durationMin: prescription.durationMin,
+        distanceM,
         descriptionMd: item.descriptionMd,
         prescriptionJson: JSON.stringify(item.prescriptionJson),
         source,
@@ -675,6 +828,7 @@ export async function saveWorkoutIdempotent(
       type,
       date,
       durationMin: prescription.durationMin,
+      distanceM,
       planned: true,
       completed: false,
       aiGenerated: true,
@@ -724,7 +878,8 @@ export async function generateAndSaveWorkout(
     prescription = validated;
 
     const explainLevel = options.explainLevel ?? "standard";
-    const markdown = formatPrescriptionMarkdown(prescription, explainLevel);
+    const includeResultTemplate = ctx.aiContext.userProfile.coachIncludeResultTemplate !== false;
+    const markdown = formatPrescriptionMarkdown(prescription, explainLevel, { includeResultTemplate });
 
     const addToCalendar = options.addToCalendar !== false && intent.addToCalendar;
     if (!addToCalendar) {
@@ -739,6 +894,7 @@ export async function generateAndSaveWorkout(
     const { workoutId, created } = await saveWorkoutIdempotent(userId, prescription, {
       createSeparate: intent.createSeparate,
       source: options.source ?? "AI",
+      includeResultTemplate,
     });
 
     console.log("[coach-brain] save", {

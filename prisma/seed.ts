@@ -37,19 +37,31 @@ function formatLocalDateInput(date: Date): string {
 async function main() {
   console.log("🌱 Starting seed...");
 
-  // Create quotes
-  console.log("📝 Creating quotes...");
-  await prisma.quote.deleteMany();
-  await prisma.quote.createMany({
-    data: QUOTES.map((q) => ({
-      text: q.text,
-      author: q.author,
-      category: q.category,
-      source: q.source || null,
-      tone: q.tone || null,
-    })),
-  });
-  console.log(`✅ Created ${QUOTES.length} real motivational quotes`);
+  // Quotes: upsert so seed is idempotent and safe to run on production
+  console.log("📝 Seeding quotes (upsert)...");
+  for (const q of QUOTES) {
+    await prisma.quote.upsert({
+      where: {
+        text_author: { text: q.text, author: q.author },
+      },
+      create: {
+        text: q.text,
+        author: q.author,
+        category: q.category,
+        source: q.source ?? null,
+        tone: q.tone ?? null,
+      },
+      update: {},
+    });
+  }
+  console.log(`✅ Upserted ${QUOTES.length} motivational quotes`);
+
+  const isProduction = process.env.NODE_ENV === "production";
+  if (isProduction) {
+    console.log("⏭️ Production: skipping demo user and demo data.");
+    console.log("\n🎉 Quote seed completed.");
+    return;
+  }
 
   // Create demo user
   console.log("👤 Creating demo user...");

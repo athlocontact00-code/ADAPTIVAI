@@ -72,6 +72,16 @@ npm run db:seed
 npm run dev
 ```
 
+### Seeding Quote of the Day on production
+
+To show "Quote of the day" on the dashboard (Vercel/Neon), seed the `quotes` table. With `NODE_ENV=production`, the seed only upserts quotes (no demo user). Run from your machine using the production DB URL (e.g. from Neon):
+
+```bash
+DATABASE_URL="postgresql://..." DIRECT_URL="postgresql://..." NODE_ENV=production npx prisma db seed
+```
+
+Apply migrations first (`npx prisma migrate deploy`). Quotes are upserted by `(text, author)`, so you can run the seed multiple times without duplicates.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env`:
@@ -101,6 +111,8 @@ Set in Vercel Project Settings > Environment Variables (no values in repo):
 - `NEXTAUTH_URL` – Your Vercel domain (e.g. https://your-app.vercel.app)
 - `NEXTAUTH_SECRET` – e.g. `openssl rand -base64 32`
 - `NODE_ENV=production`
+
+No additional environment variables are required for AI Coach features (empty state, send-to-calendar, swim level and total meters, post-workout feedback premium fields, quality gates).
 
 ## Neon Setup
 

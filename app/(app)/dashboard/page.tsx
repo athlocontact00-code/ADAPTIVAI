@@ -6,6 +6,7 @@ import { getTodayReadiness, getRiskAssessment, getReadinessTrend } from "@/lib/a
 import { getPsychologyData } from "@/lib/actions/psychology";
 import { needsCheckIn, getTodayCheckIn, getTodayPremiumCheckin } from "@/lib/actions/daily-checkin";
 import { getDashboardRetentionSummary } from "@/lib/actions/dashboard-retention";
+import { getTodayQuote } from "@/lib/actions/quotes";
 import { DashboardClientV2 } from "./dashboard-client-v2";
 
 export default async function DashboardPage() {
@@ -37,6 +38,7 @@ export default async function DashboardPage() {
     todayPremiumCheckin,
     latestDigest,
     retentionSummary,
+    quoteResult,
   ] = await Promise.all([
     safe(
       "getDashboardMetrics",
@@ -99,13 +101,13 @@ export default async function DashboardPage() {
         canShowNoonCheckInNudge: false,
       },
     }),
+    safe("getTodayQuote", getTodayQuote(), null),
   ]);
-
-  // Quote removed from main dashboard - kept minimal
 
   return (
     <DashboardClientV2
       metrics={metrics}
+      quote={quoteResult}
       upcomingWorkouts={upcoming}
       recentWorkouts={recent}
       readinessData={readinessResult.success ? readinessResult.data : null}

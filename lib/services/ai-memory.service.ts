@@ -565,7 +565,7 @@ export async function getAIMemoryContextForPrompt(userId: string): Promise<strin
     return "No AI memory available yet. Rely on objective training data.";
   }
 
-  let context = `## AI Memory Profile (${summary.totalDataPoints} data points, ${summary.visibilityScore}% visibility)\n\n`;
+  let context = `## AI Memory Profile (${summary.totalDataPoints} data points, ${summary.visibilityScore}% visibility)\nUse for Training DNA and adaptation loop (D): adjust next prescriptions from preferences and from recent feedback (vsPlanned, enjoyment).\n\n`;
 
   if (summary.psychological) {
     const p = summary.psychological;

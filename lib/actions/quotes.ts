@@ -2,9 +2,10 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { logError } from "@/lib/logger";
 import {
-  getDayOfYear,
   getDateKey,
+  getQuoteOfTheDay,
   filterQuotesByReadiness,
   getCategoryDisplay,
   formatQuoteForAI,
@@ -27,40 +28,27 @@ export interface DailyQuoteResult {
 }
 
 /**
- * Get today's quote, optionally filtered by readiness
+ * Get today's quote (deterministic by date). Optionally filter by readiness.
+ * Returns null when no quotes in DB or on error; logs errors without throwing.
  */
 export async function getTodayQuote(
   readinessScore?: number | null
 ): Promise<DailyQuoteResult | null> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return null;
-  }
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return null;
+    }
 
-  const today = new Date();
-  const dayOfYear = getDayOfYear(today);
-  const dateKey = getDateKey(today);
+    const today = new Date();
+    const dateKey = getDateKey(today);
 
-  // Get yesterday's quote to avoid same author
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = getDateKey(yesterday);
+    const rows = await db.quote.findMany({ orderBy: { id: "asc" } });
+    if (rows.length === 0) {
+      return null;
+    }
 
-  // Try to get cached quote for today from user's last viewed
-  // For simplicity, we'll use deterministic selection based on day
-
-  // Get all quotes
-  let quotes = await db.quote.findMany({
-    orderBy: { id: "asc" },
-  });
-
-  if (quotes.length === 0) {
-    return null;
-  }
-
-  // Filter by readiness if provided
-  if (readinessScore !== undefined && readinessScore !== null) {
-    const mappedQuotes: Quote[] = quotes.map((q) => ({
+    const mappedQuotes: Quote[] = rows.map((q) => ({
       id: q.id,
       text: q.text,
       author: q.author,
@@ -69,45 +57,34 @@ export async function getTodayQuote(
       tone: q.tone as QuoteTone | null,
     }));
 
-    const filtered = filterQuotesByReadiness(mappedQuotes, readinessScore);
-    if (filtered.length > 0) {
-      quotes = quotes.filter((q) => filtered.some((f) => f.id === q.id));
+    let pool = mappedQuotes;
+    if (readinessScore !== undefined && readinessScore !== null) {
+      const filtered = filterQuotesByReadiness(mappedQuotes, readinessScore);
+      if (filtered.length > 0) pool = filtered;
     }
-  }
 
-  // Get yesterday's author to avoid repetition
-  const yesterdayIndex = (getDayOfYear(yesterday) % quotes.length);
-  const yesterdayQuote = quotes[yesterdayIndex];
-  const yesterdayAuthor = yesterdayQuote?.author;
+    const selectedQuote = getQuoteOfTheDay(today, pool);
+    if (!selectedQuote) {
+      return null;
+    }
 
-  // Select today's quote
-  let todayIndex = dayOfYear % quotes.length;
-  let selectedQuote = quotes[todayIndex];
-
-  // If same author as yesterday, move to next
-  if (selectedQuote && yesterdayAuthor && selectedQuote.author === yesterdayAuthor) {
-    todayIndex = (todayIndex + 1) % quotes.length;
-    selectedQuote = quotes[todayIndex];
-  }
-
-  if (!selectedQuote) {
+    const category = selectedQuote.category as QuoteCategory;
+    return {
+      quote: {
+        id: selectedQuote.id,
+        text: selectedQuote.text,
+        author: selectedQuote.author,
+        category,
+        source: selectedQuote.source,
+        tone: selectedQuote.tone as QuoteTone | null,
+      },
+      categoryDisplay: getCategoryDisplay(category),
+      dateKey,
+    };
+  } catch (err) {
+    logError("quotes.getTodayQuote", {}, err instanceof Error ? err : undefined);
     return null;
   }
-
-  const category = selectedQuote.category as QuoteCategory;
-
-  return {
-    quote: {
-      id: selectedQuote.id,
-      text: selectedQuote.text,
-      author: selectedQuote.author,
-      category,
-      source: selectedQuote.source,
-      tone: selectedQuote.tone as QuoteTone | null,
-    },
-    categoryDisplay: getCategoryDisplay(category),
-    dateKey,
-  };
 }
 
 /**

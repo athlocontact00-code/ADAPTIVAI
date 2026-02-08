@@ -56,6 +56,7 @@ import {
   getWeeklySummaryExport,
   type DashboardRetentionSummary,
 } from "@/lib/actions/dashboard-retention";
+import type { DailyQuoteResult } from "@/lib/actions/quotes";
 
 import {
   ChartCard,
@@ -159,6 +160,7 @@ interface DashboardClientProps {
   } | null;
   premiumCheckin: TodayPremiumCheckinPayload;
   retentionSummary?: DashboardRetentionSummary;
+  quote?: DailyQuoteResult | null;
   latestDigest?: {
     id: string;
     weekStart: string;
@@ -182,6 +184,7 @@ export function DashboardClientV2({
   todayCheckIn,
   premiumCheckin,
   retentionSummary,
+  quote,
   latestDigest,
 }: DashboardClientProps) {
   const { compact, setCompact } = useCompactMode();
@@ -726,6 +729,27 @@ export function DashboardClientV2({
           />
         </div>
       </section>
+
+      {/* Quote of the Day — only when quotes exist in DB */}
+      {quote && (
+        <Card className="bg-gradient-to-r from-primary/5 via-transparent to-transparent border-primary/10">
+          <CardContent className={cn("py-5 px-6", density === "compact" && "py-3 px-4")}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <blockquote className="text-lg font-medium text-foreground/90 leading-relaxed">
+                  &ldquo;{quote.quote.text}&rdquo;
+                </blockquote>
+                <div className="mt-3 flex items-center gap-3">
+                  <p className="text-sm text-muted-foreground">— {quote.quote.author}</p>
+                  <Badge variant="outline" className={`text-xs ${quote.categoryDisplay.color}`}>
+                    {quote.categoryDisplay.label}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════
           Daily Insight (inline, dismissible)

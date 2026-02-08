@@ -7,6 +7,8 @@ export type PreferredTime = "morning" | "evening" | "any";
 export type TrainingStyle = "volume_first" | "balanced" | "intensity_first";
 export type SurfacePreference = "road" | "trail" | "treadmill";
 export type SwimPreference = "pool" | "open_water" | "both";
+/** Swim level for AI Coach pool prescriptions. */
+export type SwimLevel = "beginner" | "age_group" | "advanced" | "expert";
 
 export interface AvailabilityData {
   daysAvailable?: DayOfWeek[];
@@ -22,6 +24,8 @@ export interface PreferencesData {
   hardSessionsPerWeek?: 1 | 2 | 3;
   surfacePreference?: SurfacePreference[];
   swimPreference?: SwimPreference;
+  /** Swim level for pool sessions: beginner | age_group | advanced. Default age_group. */
+  swimLevel?: SwimLevel;
   notes?: string;
   enableDailyReminders?: boolean;
   enableLowReadinessAlerts?: boolean;

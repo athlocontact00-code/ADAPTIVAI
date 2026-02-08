@@ -56,6 +56,7 @@ export const workoutRubricPrescriptionSchema = z.object({
   variantA: z.string().optional(),
   variantB: z.string().optional(),
   successCriteria: z.string().optional(),
+  progressionNote: z.string().optional(),
   rationale: z.string(),
   why: whyDriversSchema.optional(),
 });

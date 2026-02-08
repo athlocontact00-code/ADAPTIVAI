@@ -77,11 +77,13 @@ import type {
   TrainingStyle,
   SurfacePreference,
   SwimPreference,
+  SwimLevel,
 } from "@/lib/types/profile";
 import { AVAILABILITY_PRESETS } from "@/lib/types/profile";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { parseMmSsToSeconds, formatSecondsToMmSs } from "@/lib/utils/parse-time";
 import { cn } from "@/lib/utils";
+import { getIsAdmin, resyncBillingAdmin, forceProFor24h } from "@/lib/actions/admin-billing";
 
 const ZONE_TAGS = ["Easy", "Endurance", "Tempo", "Threshold", "VO2"];
 const INPUT_CLASS =
@@ -198,6 +200,10 @@ export default function SettingsPage() {
   const [initialAvailability, setInitialAvailability] = useState<AvailabilityData>(INITIAL_AVAILABILITY);
   const [initialPreferences, setInitialPreferences] = useState<PreferencesData>(INITIAL_PREFERENCES);
   const [initialGuardrails, setInitialGuardrails] = useState<GuardrailsData>(INITIAL_GUARDRAILS);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminResyncUserId, setAdminResyncUserId] = useState("");
+  const [adminResyncLoading, setAdminResyncLoading] = useState(false);
+  const [adminForceProLoading, setAdminForceProLoading] = useState(false);
 
   const profileDirty =
     JSON.stringify(profile) !== JSON.stringify(initialProfile) ||
@@ -212,6 +218,10 @@ export default function SettingsPage() {
     const tab = searchParams.get("tab");
     if (tab === "billing") setActiveTab("billing");
   }, [searchParams]);
+
+  useEffect(() => {
+    getIsAdmin().then(setIsAdmin);
+  }, []);
 
   useEffect(() => {
     if (hasChanges && saveStatus === "saved") setSaveStatus("unsaved");
@@ -1079,6 +1089,22 @@ export default function SettingsPage() {
                         </SelectContent>
                       </Select>
                     </SettingsField>
+                    <SettingsField label="Swim level" hint="For AI Coach pool prescriptions. Default: Age group">
+                      <Select
+                        value={preferences.swimLevel ?? "age_group"}
+                        onValueChange={(v: SwimLevel) =>
+                          setPreferences({ ...preferences, swimLevel: v })
+                        }
+                      >
+                        <SelectTrigger className={INPUT_CLASS}><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="beginner">Beginner (800–1600m)</SelectItem>
+                          <SelectItem value="age_group">Age group (1600–2800m)</SelectItem>
+                          <SelectItem value="advanced">Advanced (2500–4000m)</SelectItem>
+                          <SelectItem value="expert">Expert (3500–5500m+)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsField>
                     <SettingsField label="Notes for AI" hint="Things AI coach should know">
                       <Textarea
                         className={cn(INPUT_CLASS, "min-h-[80px] resize-none")}
@@ -1604,6 +1630,104 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </SettingsSectionCard>
+
+                {isAdmin && (
+                  <SettingsSectionCard
+                    title="Billing Tools (Admin)"
+                    icon={Shield}
+                    description="Resync subscription from Stripe. Use when webhook missed or status is stale."
+                  >
+                    <div className="space-y-4">
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-[12px]"
+                        disabled={adminResyncLoading}
+                        onClick={async () => {
+                          setAdminResyncLoading(true);
+                          try {
+                            const r = await resyncBillingAdmin();
+                            if (r.ok) {
+                              toast.success(
+                                `Resynced. Plan: ${r.plan}${r.subscriptionStatus ? ` · Status: ${r.subscriptionStatus}` : ""}${r.currentPeriodEnd ? ` · Period end: ${new Date(r.currentPeriodEnd).toLocaleDateString()}` : ""}`
+                              );
+                              router.refresh();
+                            } else {
+                              toast.error(r.error ?? "Resync failed");
+                            }
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Resync failed");
+                          } finally {
+                            setAdminResyncLoading(false);
+                          }
+                        }}
+                      >
+                        {adminResyncLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Resync my subscription"}
+                      </Button>
+                      <div className="flex gap-2">
+                        <Input
+                          className={INPUT_CLASS}
+                          placeholder="User ID (optional)"
+                          value={adminResyncUserId}
+                          onChange={(e) => setAdminResyncUserId(e.target.value)}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={adminResyncLoading || !adminResyncUserId.trim()}
+                          onClick={async () => {
+                            const uid = adminResyncUserId.trim();
+                            if (!uid) return;
+                            setAdminResyncLoading(true);
+                            try {
+                              const r = await resyncBillingAdmin(uid);
+                              if (r.ok) {
+                                toast.success(
+                                  `Resynced user ${uid}. Plan: ${r.plan}${r.subscriptionStatus ? ` · ${r.subscriptionStatus}` : ""}`
+                                );
+                                router.refresh();
+                              } else {
+                                toast.error(r.error ?? "Resync failed");
+                              }
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Resync failed");
+                            } finally {
+                              setAdminResyncLoading(false);
+                            }
+                          }}
+                        >
+                          Resync user
+                        </Button>
+                      </div>
+                      <div className="pt-2 border-t border-white/[0.06]">
+                        <p className="text-xs text-muted-foreground mb-2">Entitlement override (no Stripe change)</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={adminForceProLoading}
+                          onClick={async () => {
+                            setAdminForceProLoading(true);
+                            try {
+                              const r = await forceProFor24h(adminResyncUserId.trim() || undefined);
+                              if (r.ok) {
+                                toast.success(`Force PRO 24h set for ${r.userId}. Expires ${new Date(r.expiresAt).toLocaleString()}`);
+                                router.refresh();
+                              } else {
+                                toast.error(r.error ?? "Failed");
+                              }
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Failed");
+                            } finally {
+                              setAdminForceProLoading(false);
+                            }
+                          }}
+                        >
+                          {adminForceProLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Force PRO for 24h"}
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground ml-2">(current user if ID empty)</span>
+                      </div>
+                    </div>
+                  </SettingsSectionCard>
+                )}
               </TabsContent>
             </div>
 

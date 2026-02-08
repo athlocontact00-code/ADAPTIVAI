@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -7,58 +8,12 @@ import { track } from "@/lib/analytics/events";
 import { createRequestId, logError, logInfo } from "@/lib/logger";
 import { updateCoachInsightsFromFeedback } from "@/lib/services/ai-memory.service";
 
-const feedbackDb = db as unknown as {
-  postWorkoutFeedback: {
-    update: (args: {
-      where: { id: string };
-      data: {
-        perceivedDifficulty: PerceivedDifficulty;
-        vsPlanned: FeltVsPlanned;
-        enjoyment: number;
-        discomfort: Discomfort;
-        mentalState: number;
-        actualAvgHR: number | null;
-        actualMaxHR: number | null;
-        actualPaceText: string | null;
-        actualRpe: number | null;
-        actualFeel: number | null;
-        sessionEquipment: string | null;
-        sessionTerrain: string | null;
-        sessionAvailability: string | null;
-        comment: string | null;
-        visibleToAI: boolean;
-        visibleToFuturePlanning: boolean;
-      };
-    }) => Promise<{ id: string }>;
-    create: (args: {
-      data: {
-        userId: string;
-        workoutId: string;
-        perceivedDifficulty: PerceivedDifficulty;
-        vsPlanned: FeltVsPlanned;
-        enjoyment: number;
-        discomfort: Discomfort;
-        mentalState: number;
-        actualAvgHR: number | null;
-        actualMaxHR: number | null;
-        actualPaceText: string | null;
-        actualRpe: number | null;
-        actualFeel: number | null;
-        sessionEquipment: string | null;
-        sessionTerrain: string | null;
-        sessionAvailability: string | null;
-        comment: string | null;
-        visibleToAI: boolean;
-        visibleToFuturePlanning: boolean;
-      };
-    }) => Promise<{ id: string }>;
-  };
-};
-
 // Types
 export type PerceivedDifficulty = "EASY" | "OK" | "HARD" | "BRUTAL";
 export type FeltVsPlanned = "EASIER" | "SAME" | "HARDER";
 export type Discomfort = "NONE" | "MILD" | "MODERATE" | "SEVERE";
+export type PostWorkoutFeeling = "GREAT" | "GOOD" | "OK" | "TIRED" | "BAD";
+export type LegsFeel = "FRESH" | "NORMAL" | "HEAVY" | "SORE";
 
 export interface SaveFeedbackInput {
   workoutId: string;
@@ -78,6 +33,16 @@ export interface SaveFeedbackInput {
   comment?: string;
   visibleToAI?: boolean;
   visibleToFuturePlanning?: boolean;
+  // Premium: metrics for AI learning
+  durationMin?: number;
+  distanceMeters?: number;
+  avgPower?: number;
+  avgPaceSecPerKm?: number;
+  avgSpeedKph?: number;
+  swimAvgPaceSecPer100m?: number;
+  feeling?: PostWorkoutFeeling;
+  legs?: LegsFeel;
+  intervalsJson?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
 export interface FeedbackResult {
@@ -108,6 +73,16 @@ export interface FeedbackData {
   createdAt: Date;
   updatedAt: Date;
   isEditable: boolean;
+  // Premium
+  durationMin: number | null;
+  distanceMeters: number | null;
+  avgPower: number | null;
+  avgPaceSecPerKm: number | null;
+  avgSpeedKph: number | null;
+  swimAvgPaceSecPer100m: number | null;
+  feeling: PostWorkoutFeeling | null;
+  legs: LegsFeel | null;
+  intervalsJson: unknown;
 }
 
 export interface FeedbackPatterns {
@@ -121,6 +96,37 @@ export interface FeedbackPatterns {
   lowEnjoymentStreak: number;
   insights: string[];
   recommendations: string[];
+}
+
+function buildFeedbackData(input: SaveFeedbackInput) {
+  return {
+    perceivedDifficulty: input.perceivedDifficulty,
+    vsPlanned: input.vsPlanned,
+    enjoyment: input.enjoyment,
+    discomfort: input.discomfort,
+    mentalState: input.mentalState,
+    actualAvgHR: typeof input.actualAvgHR === "number" ? input.actualAvgHR : null,
+    actualMaxHR: typeof input.actualMaxHR === "number" ? input.actualMaxHR : null,
+    actualPaceText: input.actualPaceText ? String(input.actualPaceText) : null,
+    actualRpe: typeof input.actualRpe === "number" ? input.actualRpe : null,
+    actualFeel: typeof input.actualFeel === "number" ? input.actualFeel : null,
+    sessionEquipment: input.sessionEquipment ? String(input.sessionEquipment) : null,
+    sessionTerrain: input.sessionTerrain ? String(input.sessionTerrain) : null,
+    sessionAvailability: input.sessionAvailability ? String(input.sessionAvailability) : null,
+    comment: input.comment ? String(input.comment) : null,
+    visibleToAI: input.visibleToAI ?? true,
+    visibleToFuturePlanning: input.visibleToFuturePlanning ?? true,
+    durationMin: input.durationMin ?? null,
+    distanceMeters: input.distanceMeters ?? null,
+    avgPower: input.avgPower ?? null,
+    avgPaceSecPerKm: input.avgPaceSecPerKm ?? null,
+    avgSpeedKph: input.avgSpeedKph ?? null,
+    swimAvgPaceSecPer100m: input.swimAvgPaceSecPer100m ?? null,
+    feeling: input.feeling ?? null,
+    legs: input.legs ?? null,
+    intervalsJson:
+      input.intervalsJson != null ? (input.intervalsJson as Prisma.InputJsonValue) : Prisma.JsonNull,
+  };
 }
 
 /**
@@ -157,6 +163,17 @@ export async function getFeedbackForWorkout(workoutId: string): Promise<Feedback
       sessionAvailability?: string | null;
     };
 
+    const f = feedback as typeof feedback & {
+      durationMin?: number | null;
+      distanceMeters?: number | null;
+      avgPower?: number | null;
+      avgPaceSecPerKm?: number | null;
+      avgSpeedKph?: number | null;
+      swimAvgPaceSecPer100m?: number | null;
+      feeling?: PostWorkoutFeeling | null;
+      legs?: LegsFeel | null;
+      intervalsJson?: unknown;
+    };
     return {
       id: feedback.id,
       workoutId: feedback.workoutId,
@@ -178,6 +195,15 @@ export async function getFeedbackForWorkout(workoutId: string): Promise<Feedback
       createdAt: feedback.createdAt,
       updatedAt: feedback.updatedAt,
       isEditable,
+      durationMin: typeof f.durationMin === "number" ? f.durationMin : null,
+      distanceMeters: typeof f.distanceMeters === "number" ? f.distanceMeters : null,
+      avgPower: typeof f.avgPower === "number" ? f.avgPower : null,
+      avgPaceSecPerKm: typeof f.avgPaceSecPerKm === "number" ? f.avgPaceSecPerKm : null,
+      avgSpeedKph: typeof f.avgSpeedKph === "number" ? f.avgSpeedKph : null,
+      swimAvgPaceSecPer100m: typeof f.swimAvgPaceSecPer100m === "number" ? f.swimAvgPaceSecPer100m : null,
+      feeling: f.feeling ?? null,
+      legs: f.legs ?? null,
+      intervalsJson: f.intervalsJson ?? null,
     };
   } catch (error) {
     logError("feedback.fetch_failed", {
@@ -237,26 +263,10 @@ export async function saveFeedback(input: SaveFeedbackInput): Promise<FeedbackRe
       }
 
       // Update existing feedback
-      const updated = await feedbackDb.postWorkoutFeedback.update({
+      const updateData = buildFeedbackData(input);
+      const updated = await db.postWorkoutFeedback.update({
         where: { id: existingFeedback.id },
-        data: {
-          perceivedDifficulty: input.perceivedDifficulty,
-          vsPlanned: input.vsPlanned,
-          enjoyment: input.enjoyment,
-          discomfort: input.discomfort,
-          mentalState: input.mentalState,
-          actualAvgHR: typeof input.actualAvgHR === "number" ? input.actualAvgHR : null,
-          actualMaxHR: typeof input.actualMaxHR === "number" ? input.actualMaxHR : null,
-          actualPaceText: input.actualPaceText ? String(input.actualPaceText) : null,
-          actualRpe: typeof input.actualRpe === "number" ? input.actualRpe : null,
-          actualFeel: typeof input.actualFeel === "number" ? input.actualFeel : null,
-          sessionEquipment: input.sessionEquipment ? String(input.sessionEquipment) : null,
-          sessionTerrain: input.sessionTerrain ? String(input.sessionTerrain) : null,
-          sessionAvailability: input.sessionAvailability ? String(input.sessionAvailability) : null,
-          comment: input.comment ? String(input.comment) : null,
-          visibleToAI: input.visibleToAI ?? true,
-          visibleToFuturePlanning: input.visibleToFuturePlanning ?? true,
-        },
+        data: updateData,
       });
 
       revalidatePath(`/workouts/${input.workoutId}`);
@@ -290,26 +300,12 @@ export async function saveFeedback(input: SaveFeedbackInput): Promise<FeedbackRe
     }
 
     // Create new feedback
-    const feedback = await feedbackDb.postWorkoutFeedback.create({
+    const createData = buildFeedbackData(input);
+    const feedback = await db.postWorkoutFeedback.create({
       data: {
         userId: session.user.id,
         workoutId: input.workoutId,
-        perceivedDifficulty: input.perceivedDifficulty,
-        vsPlanned: input.vsPlanned,
-        enjoyment: input.enjoyment,
-        discomfort: input.discomfort,
-        mentalState: input.mentalState,
-        actualAvgHR: typeof input.actualAvgHR === "number" ? input.actualAvgHR : null,
-        actualMaxHR: typeof input.actualMaxHR === "number" ? input.actualMaxHR : null,
-        actualPaceText: input.actualPaceText ? String(input.actualPaceText) : null,
-        actualRpe: typeof input.actualRpe === "number" ? input.actualRpe : null,
-        actualFeel: typeof input.actualFeel === "number" ? input.actualFeel : null,
-        sessionEquipment: input.sessionEquipment ? String(input.sessionEquipment) : null,
-        sessionTerrain: input.sessionTerrain ? String(input.sessionTerrain) : null,
-        sessionAvailability: input.sessionAvailability ? String(input.sessionAvailability) : null,
-        comment: input.comment ? String(input.comment) : null,
-        visibleToAI: input.visibleToAI ?? true,
-        visibleToFuturePlanning: input.visibleToFuturePlanning ?? true,
+        ...createData,
       },
     });
 
@@ -897,6 +893,15 @@ export async function getRecentFeedback(limit: number = 10): Promise<Array<Feedb
         sessionEquipment?: string | null;
         sessionTerrain?: string | null;
         sessionAvailability?: string | null;
+        durationMin?: number | null;
+        distanceMeters?: number | null;
+        avgPower?: number | null;
+        avgPaceSecPerKm?: number | null;
+        avgSpeedKph?: number | null;
+        swimAvgPaceSecPer100m?: number | null;
+        feeling?: PostWorkoutFeeling | null;
+        legs?: LegsFeel | null;
+        intervalsJson?: unknown;
       };
 
       const workout = workoutMap.get(f.workoutId);
@@ -924,6 +929,15 @@ export async function getRecentFeedback(limit: number = 10): Promise<Array<Feedb
         createdAt: f.createdAt,
         updatedAt: f.updatedAt,
         isEditable: feedbackDate.getTime() === today.getTime(),
+        durationMin: typeof withActuals.durationMin === "number" ? withActuals.durationMin : null,
+        distanceMeters: typeof withActuals.distanceMeters === "number" ? withActuals.distanceMeters : null,
+        avgPower: typeof withActuals.avgPower === "number" ? withActuals.avgPower : null,
+        avgPaceSecPerKm: typeof withActuals.avgPaceSecPerKm === "number" ? withActuals.avgPaceSecPerKm : null,
+        avgSpeedKph: typeof withActuals.avgSpeedKph === "number" ? withActuals.avgSpeedKph : null,
+        swimAvgPaceSecPer100m: typeof withActuals.swimAvgPaceSecPer100m === "number" ? withActuals.swimAvgPaceSecPer100m : null,
+        feeling: withActuals.feeling ?? null,
+        legs: withActuals.legs ?? null,
+        intervalsJson: withActuals.intervalsJson ?? null,
         workoutTitle: workout?.title || "Unknown Workout",
         workoutDate: workout?.date || f.createdAt,
       };

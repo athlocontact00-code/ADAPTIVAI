@@ -85,6 +85,23 @@ enum FeltVsPlanned {
   HARDER
 }
 
+// Post-workout feeling (for AI learning)
+enum PostWorkoutFeeling {
+  GREAT
+  GOOD
+  OK
+  TIRED
+  BAD
+}
+
+// Legs feel after workout
+enum LegsFeel {
+  FRESH
+  NORMAL
+  HEAVY
+  SORE
+}
+
 // Diary visibility levels (Spec v1.0 §3.1)
 enum DiaryVisibility {
   FULL_AI_ACCESS
@@ -157,7 +174,8 @@ model User {
   aiWarnings           AIWarning[]
   analyticsEvents      AnalyticsEvent[]
   subscriptions       Subscription[]
-  
+  entitlementOverrides EntitlementOverride[]
+
   @@map("users")
 }
 
@@ -215,6 +233,20 @@ model Subscription {
   @@index([userId])
   @@index([status])
   @@map("subscriptions")
+}
+
+model EntitlementOverride {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proEnabled  Boolean   @default(true)
+  expiresAt   DateTime?
+  reason      String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("entitlement_overrides")
 }
 
 model StripeEvent {
@@ -475,6 +507,7 @@ model Quote {
   tone      String?  // SUPPORTIVE | EXECUTION | NEUTRAL
   createdAt DateTime @default(now())
 
+  @@unique([text, author])
   @@index([category])
   @@index([tone])
   @@map("quotes")
@@ -997,6 +1030,17 @@ model PostWorkoutFeedback {
   sessionEquipment    String?
   sessionTerrain      String?
   sessionAvailability String?
+
+  // Premium: metrics for AI learning (pace/power/CSS targets)
+  durationMin             Int?
+  distanceMeters           Int?
+  avgPower                 Int?
+  avgPaceSecPerKm          Int?     // run
+  avgSpeedKph              Float?
+  swimAvgPaceSecPer100m    Int?
+  feeling                  PostWorkoutFeeling?
+  legs                     LegsFeel?
+  intervalsJson            Json?    // e.g. [{ rep, distanceM, timeSec, restSec }]
   
   // AI visibility controls
   visibleToAI              Boolean @default(true)

@@ -548,6 +548,9 @@ export async function getCoachContext() {
         ? legacyReadiness
         : 0;
 
+    const prefs = (profile?.preferences as Record<string, unknown> | null) ?? {};
+    const coachIncludeResultTemplate = prefs.coachIncludeResultTemplate !== false;
+
     return {
       sport: profile?.sportPrimary || "running",
       experienceLevel: profile?.experienceLevel || "intermediate",
@@ -559,6 +562,7 @@ export async function getCoachContext() {
       lastWeekHours: Math.round(weeklyHours * 10) / 10,
       lastWeekTss: weeklyTss,
       workoutsLastWeek: weekWorkouts.length,
+      coachIncludeResultTemplate,
     };
   } catch (error) {
     console.error("Get coach context error:", error);

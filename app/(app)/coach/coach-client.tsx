@@ -34,8 +34,11 @@ import { CoachContextToggles, type CoachContextPayload } from "@/components/coac
 import { HowItWorksDialog } from "@/components/coach/how-it-works-dialog";
 import { PaywallCard } from "@/components/paywall-card";
 import { sendCoachMessage } from "@/lib/actions/coach-chat";
-import { undoDraftWorkouts } from "@/lib/actions/coach-draft";
-import { SAMPLE_WORKOUT_JSON } from "@/lib/mock/coach";
+import { undoDraftWorkouts, insertWorkoutFromCoachResponse, updateCoachIncludeResultTemplate } from "@/lib/actions/coach-draft";
+import { isSendToCalendarIntent } from "@/lib/utils/coach-intent";
+
+const EMPTY_STATE_MESSAGE =
+  "No workouts yet. Generate today's workout or start a chat.";
 interface PlanLog {
   id: string;
   startDate: Date;
@@ -55,6 +58,7 @@ interface CoachContext {
   lastWeekHours: number;
   lastWeekTss: number;
   workoutsLastWeek: number;
+  coachIncludeResultTemplate?: boolean;
 }
 
 interface PsychologyData {
@@ -206,7 +210,6 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
 
       const now = new Date();
       const id = `conv-${now.getTime()}`;
-      const sampleContent = `Here's an example workout I can generate for you:\n\n\`\`\`json\n${JSON.stringify(SAMPLE_WORKOUT_JSON)}\n\`\`\`\n\nUse the cards above or type below to get started.`;
       const initial: StoredConversation = {
         id,
         title: "New chat",
@@ -216,7 +219,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
           {
             id: "welcome",
             role: "assistant",
-            content: sampleContent,
+            content: EMPTY_STATE_MESSAGE,
             timestamp: now.toISOString(),
           },
         ],
@@ -236,7 +239,6 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
     } catch {
       const now = new Date();
       const id = `conv-${now.getTime()}`;
-      const sampleContent = `Here's an example workout I can generate:\n\n\`\`\`json\n${JSON.stringify(SAMPLE_WORKOUT_JSON)}\n\`\`\`\n\nUse the cards above or type below to get started.`;
       const fallback: StoredConversation = {
         id,
         title: "New chat",
@@ -246,7 +248,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
           {
             id: "welcome",
             role: "assistant",
-            content: sampleContent,
+            content: EMPTY_STATE_MESSAGE,
             timestamp: now.toISOString(),
           },
         ],
@@ -317,11 +319,10 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
   function startNewChat() {
     const now = new Date();
     const id = `conv-${now.getTime()}`;
-    const sampleContent = `Here's an example workout I can generate for you:\n\n\`\`\`json\n${JSON.stringify(SAMPLE_WORKOUT_JSON)}\n\`\`\`\n\nUse the cards above or type below to get started.`;
     const welcome: Message = {
       id: "welcome",
       role: "assistant",
-      content: sampleContent,
+      content: EMPTY_STATE_MESSAGE,
       timestamp: now,
     };
     setActiveConversationId(id);
@@ -385,6 +386,52 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
     ]);
 
     try {
+      if (isSendToCalendarIntent(text)) {
+        const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+        if (lastAssistant?.content) {
+          const insertResult = await insertWorkoutFromCoachResponse(lastAssistant.content, {
+            forceMode: "final",
+          });
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => !m.id.startsWith("thinking-"));
+            if (insertResult.success) {
+              const idLine =
+                insertResult.createdIds?.length > 0
+                  ? ` (Workout ID: ${insertResult.createdIds[0]})`
+                  : "";
+              return [
+                ...filtered,
+                {
+                  id: `assistant-${Date.now()}`,
+                  role: "assistant",
+                  content: `Added to calendar ✅${idLine}`,
+                  timestamp: new Date(),
+                },
+              ];
+            }
+            return [
+              ...filtered,
+              {
+                id: `assistant-${Date.now()}`,
+                role: "assistant",
+                content: `❌ ${insertResult.error ?? "Could not add to calendar."}`,
+                timestamp: new Date(),
+              },
+            ];
+          });
+          if (insertResult.success) {
+            toast.success("Added to calendar");
+            router.refresh();
+            return;
+          }
+          toast.error(insertResult.error ?? "Could not add to calendar");
+          return;
+        }
+        toast.error("No workout in the last message. Ask the coach to prescribe a session first, then say 'add to calendar'.");
+        setMessages((prev) => prev.filter((m) => !m.id.startsWith("thinking-")));
+        return;
+      }
+
       const result = await sendCoachMessage({
         input: text,
         history: historyForRequest,
@@ -653,6 +700,19 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
             {/* Input */}
             <div className="border-t p-4 space-y-3">
               <CoachContextToggles value={contextPayload} onChange={setContextPayload} />
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={context?.coachIncludeResultTemplate !== false}
+                  onChange={async (e) => {
+                    const checked = e.target.checked;
+                    const res = await updateCoachIncludeResultTemplate(checked);
+                    if (res.success) router.refresh();
+                  }}
+                  className="rounded border-input"
+                />
+                <span>Include result template in workout descriptions</span>
+              </label>
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}

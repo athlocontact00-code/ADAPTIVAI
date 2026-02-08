@@ -48,6 +48,28 @@ export function getDateKey(date: Date = new Date()): string {
 }
 
 /**
+ * Simple deterministic hash of a string (djb2-style) for quote-of-the-day index.
+ */
+function hashDateKey(dateKey: string): number {
+  let h = 5381;
+  for (let i = 0; i < dateKey.length; i++) {
+    h = ((h << 5) + h) + dateKey.charCodeAt(i);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Get quote of the day deterministically (same date = same quote).
+ * Returns null if quotes array is empty.
+ */
+export function getQuoteOfTheDay(date: Date, quotes: Quote[]): Quote | null {
+  if (quotes.length === 0) return null;
+  const dateKey = getDateKey(date);
+  const index = hashDateKey(dateKey) % quotes.length;
+  return quotes[index] ?? null;
+}
+
+/**
  * Select quote index based on day, avoiding same author as yesterday
  */
 export function selectQuoteIndex(

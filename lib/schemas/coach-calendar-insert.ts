@@ -11,6 +11,8 @@ export const calendarInsertItemSchema = z.object({
   durationMin: z.number().int().min(1).default(60),
   descriptionMd: z.string(),
   prescriptionJson: z.record(z.unknown()).default({ steps: [] }),
+  /** Total distance in meters (e.g. for swim). */
+  totalDistanceMeters: z.number().int().min(0).nullable().optional(),
 });
 
 export type CalendarInsertItem = z.infer<typeof calendarInsertItemSchema>;

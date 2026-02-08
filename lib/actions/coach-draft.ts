@@ -1,10 +1,13 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { parseDateToLocalNoon } from "@/lib/utils";
+import { parseCalendarInsertFromResponse } from "@/lib/schemas/coach-calendar-insert";
 import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
+import { parseSwimMetersFromText } from "@/lib/utils/swim-meters";
 
 const AI_DRAFT_SOURCE = "AI_DRAFT";
 const AI_FINAL_SOURCE = "AI";
@@ -70,6 +73,28 @@ export async function updateCoachCalendarSettings(settings: Partial<CoachCalenda
   return { success: true };
 }
 
+/**
+ * Update "Include result template" in coach workout descriptions (profile preferences).
+ */
+export async function updateCoachIncludeResultTemplate(include: boolean): Promise<{ success: boolean; error?: string }> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  const profile = await db.profile.findFirst({
+    where: { userId: session.user.id },
+    select: { id: true, preferences: true },
+  });
+  if (!profile) return { success: false, error: "Profile not found" };
+
+  const prefs = (profile.preferences as Record<string, unknown> | null) ?? {};
+  prefs.coachIncludeResultTemplate = include;
+  await db.profile.update({
+    where: { id: profile.id },
+    data: { preferences: prefs as Prisma.InputJsonValue },
+  });
+  return { success: true };
+}
+
 function mapSportToType(sport: string): string {
   const upper = sport.toUpperCase();
   if (upper === "SWIM") return "SWIM";
@@ -103,6 +128,12 @@ export async function insertDraftWorkoutsFromCalendarJson(
         ? JSON.stringify(item.prescriptionJson)
         : "{}";
 
+    let distanceM: number | undefined = item.totalDistanceMeters ?? undefined;
+    if (type === "SWIM" && distanceM == null && item.descriptionMd) {
+      const parsed = parseSwimMetersFromText(item.descriptionMd);
+      if (parsed != null) distanceM = parsed;
+    }
+
     const created = await db.workout.create({
       data: {
         userId,
@@ -110,6 +141,7 @@ export async function insertDraftWorkoutsFromCalendarJson(
         type,
         date,
         durationMin: item.durationMin ?? 60,
+        distanceM,
         planned: true,
         completed: false,
         aiGenerated: true,
@@ -123,6 +155,31 @@ export async function insertDraftWorkoutsFromCalendarJson(
   }
 
   return { success: true, createdIds };
+}
+
+/**
+ * Parse coach response text for calendarInsert JSON and insert into DB.
+ * Used when user says "send to calendar" / "add to calendar" to persist the last prescribed workout.
+ * Revalidates /coach, /today, /calendar, /dashboard so Today and calendar refresh.
+ */
+export async function insertWorkoutFromCoachResponse(
+  responseText: string,
+  options?: { forceMode?: "draft" | "final" }
+): Promise<{ success: boolean; createdIds: string[]; error?: string }> {
+  const payload = parseCalendarInsertFromResponse(responseText);
+  if (!payload || payload.items.length === 0) {
+    return { success: false, createdIds: [], error: "No workout found in the last message. Ask the coach to prescribe a session first, then say 'add to calendar'." };
+  }
+  const result = await insertDraftWorkoutsFromCalendarJson(payload, {
+    forceMode: options?.forceMode ?? "final",
+  });
+  if (result.success) {
+    revalidatePath("/coach");
+    revalidatePath("/today");
+    revalidatePath("/calendar");
+    revalidatePath("/dashboard");
+  }
+  return result;
 }
 
 /**

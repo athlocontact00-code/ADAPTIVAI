@@ -26,11 +26,39 @@ function parseGraceDays(): number {
 
 /**
  * Deterministic plan derivation:
- * - If active Stripe subscription (Pro) -> PRO
+ * - If active admin entitlement override (proEnabled, not expired) -> PRO
+ * - Else if active Stripe subscription (Pro) -> PRO
  * - Else if now < trialEndsAt (app-level trial) -> TRIAL
  * - Else -> FREE
  */
 export async function getEntitlements(userId: string): Promise<Entitlements> {
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  const override = await db.entitlementOverride.findUnique({
+    where: { userId },
+    select: { proEnabled: true, expiresAt: true },
+  });
+  const overrideActive =
+    override?.proEnabled &&
+    (override.expiresAt == null || override.expiresAt.getTime() > nowMs);
+
+  if (overrideActive) {
+    return {
+      isPro: true,
+      plan: "PRO",
+      status: "override",
+      renewAt: override?.expiresAt ?? null,
+      isTrialActive: false,
+      trialEndsAt: null,
+      trialDaysRemaining: null,
+      canUseAICoach: true,
+      canUseSimulator: true,
+      canUseReports: true,
+      currentPeriodEnd: override?.expiresAt ?? null,
+    };
+  }
+
   const user = await db.user.findUnique({
     where: { id: userId },
     select: {
@@ -48,9 +76,6 @@ export async function getEntitlements(userId: string): Promise<Entitlements> {
       currentPeriodEnd: true,
     },
   });
-
-  const now = new Date();
-  const nowMs = now.getTime();
 
   const trialEndsAt = user?.trialEndsAt ?? null;
   const trialTimeLeft = Boolean(trialEndsAt && trialEndsAt.getTime() > nowMs);

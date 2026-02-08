@@ -31,6 +31,11 @@ import {
 import { generateAndSaveWorkout } from "@/lib/services/coach-brain";
 import { getAIMemoryContextForPrompt } from "@/lib/services/ai-memory.service";
 import { logError } from "@/lib/logger";
+import {
+  validateSportCorrectness,
+  validateSwimMetersCompleteness,
+  deriveExpectedSport,
+} from "@/lib/utils/coach-gates";
 
 export type CoachContextOverrides = {
   useCheckInData?: boolean;
@@ -979,6 +984,20 @@ ${created.descriptionMd}`;
     usedLLM = true;
 
     text = stripMedicalDiagnosisLanguage(llmText);
+
+    // Quality gates: sport correctness and swim meters completeness (one retry each)
+    const expectedSport = deriveExpectedSport(message, context.userProfile.sportPrimary);
+    const sportCheck = validateSportCorrectness(text, expectedSport);
+    if (!sportCheck.valid && expectedSport && sportCheck.detectedSport) {
+      const retryUser = `${userPrompt}\n\n[Correction: The user asked for ${expectedSport}. Your reply was about ${sportCheck.detectedSport}. Reply again with a prescription only for ${expectedSport}.]`;
+      const retryText = await callOpenAIChat({ system: systemPrompt, user: retryUser, history: input.history });
+      text = stripMedicalDiagnosisLanguage(retryText);
+    }
+    if (expectedSport === "SWIM" && !validateSwimMetersCompleteness(text)) {
+      const retryUser = `${userPrompt}\n\n[Correction: Rewrite the swim plan with explicit meters for every set (e.g. "400m", "4×50m") and include a line "TOTAL METERS: <sum>" at the end.]`;
+      const retryText = await callOpenAIChat({ system: systemPrompt, user: retryUser, history: input.history });
+      text = stripMedicalDiagnosisLanguage(retryText);
+    }
 
     confidence = /\bnot (entirely )?sure\b/i.test(text) || /\blow confidence\b/i.test(text) ? 60 : 80;
 
