@@ -434,12 +434,18 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
               },
             ];
           }
+          // Never show raw technical errors. Show generated text if we have it, then a friendly line.
+          const friendlyLine =
+            "I couldn't add this to the calendar automatically. You can try again in a moment or say \"add to calendar\" after this message.";
+          const displayContent = fallbackResult.generatedText
+            ? `${fallbackResult.generatedText}\n\n— ${friendlyLine}`
+            : `I had trouble adding to the calendar right now. Try asking: "Generate today's workout and add to calendar."`;
           return [
             ...filtered,
             {
               id: `assistant-${Date.now()}`,
               role: "assistant",
-              content: `❌ ${fallbackResult.error ?? "Could not add to calendar."}`,
+              content: displayContent,
               timestamp: new Date(),
             },
           ];
@@ -448,7 +454,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
           toast.success("Generated today's workout and added to calendar");
           router.refresh();
         } else {
-          toast.error(fallbackResult.error ?? "Could not add to calendar");
+          toast.info("Workout generated; add to calendar didn't complete. You can try again.");
         }
         return;
       }

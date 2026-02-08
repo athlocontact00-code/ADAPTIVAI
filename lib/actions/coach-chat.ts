@@ -552,6 +552,10 @@ function isSevenDayPlanRequest(input: string): boolean {
 
 function isTodayWorkoutsRequest(input: string): boolean {
   const s = input.toLowerCase().trim();
+  // Do not treat as "list today's workouts" when user wants to generate/create one
+  if (/\b(generate|create|write|give\s+me|prescribe|plan\s+me\s+a|zaplanuj|napisz|daj\s+mi)\b/.test(s)) {
+    return false;
+  }
   if (/(^|\b)(today|todays|to-day)\b/.test(s) && /\b(workout|workouts|training|session|sessions)\b/.test(s)) {
     return true;
   }
@@ -1088,7 +1092,7 @@ ${created.descriptionMd}`;
 }
 
 const FALLBACK_CALENDAR_USER_MESSAGE =
-  "Generate ONE complete session for today now. Include the CALENDAR BLOCK in the exact required format (markdown and JSON block with calendarInsert and items).";
+  "Generate ONE complete session for today now. Your reply MUST end with a ```json code block containing this exact structure: {\"calendarInsert\":true,\"mode\":\"final\",\"items\":[{\"date\":\"YYYY-MM-DD\",\"sport\":\"RUN\",\"title\":\"...\",\"durationMin\":45,\"descriptionMd\":\"...\"}]}. Use today's date for date. Include full workout text in descriptionMd.";
 
 export type GenerateWorkoutAndAddToCalendarResult = {
   success: boolean;

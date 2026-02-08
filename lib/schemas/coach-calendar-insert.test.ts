@@ -69,4 +69,27 @@ Calendar insert ready.`;
     expect(payload?.items[0].title).toBe("Easy Run");
     expect(payload?.items[0].date).toBe("2026-02-10");
   });
+
+  it("extracts when LLM uses descriptionMarkdown and trailing comma (normalizeToPayload)", () => {
+    const message = `Here is your session.
+\`\`\`json
+{
+  "calendarInsert": true,
+  "mode": "final",
+  "items": [
+    {
+      "date": "2026-02-10",
+      "sport": "RUN",
+      "title": "Easy Run",
+      "durationMin": "45",
+      "descriptionMarkdown": "Warm-up, main set, cool-down."
+    }
+  ]
+}
+\`\`\``;
+    const payload = parseCalendarInsertFromResponse(message);
+    expect(payload).not.toBeNull();
+    expect(payload?.items[0].descriptionMd).toBe("Warm-up, main set, cool-down.");
+    expect(payload?.items[0].durationMin).toBe(45);
+  });
 });
