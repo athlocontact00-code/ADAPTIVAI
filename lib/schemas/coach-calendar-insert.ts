@@ -26,18 +26,59 @@ export const calendarInsertPayloadSchema = z.object({
 
 export type CalendarInsertPayload = z.infer<typeof calendarInsertPayloadSchema>;
 
+/** Optional single-workout wrapper for extraction (e.g. <WORKOUT_JSON>...</WORKOUT_JSON>). */
+const workoutJsonItemSchema = z.object({
+  title: z.string().min(1),
+  sport: z.enum(["SWIM", "BIKE", "RUN", "STRENGTH"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+  totalMinutes: z.number().int().min(1).optional(),
+  descriptionMarkdown: z.string().optional(),
+});
+
+function payloadFromWorkoutJson(obj: z.infer<typeof workoutJsonItemSchema>): CalendarInsertPayload {
+  const durationMin = obj.totalMinutes ?? 60;
+  const descriptionMd = obj.descriptionMarkdown ?? obj.title;
+  return {
+    calendarInsert: true,
+    mode: "final",
+    items: [
+      {
+        date: obj.date,
+        sport: obj.sport,
+        title: obj.title,
+        durationMin,
+        descriptionMd,
+        prescriptionJson: { steps: [] },
+        totalDistanceMeters: undefined,
+      },
+    ],
+  };
+}
+
 /**
  * Extract and parse the calendar insert JSON from coach LLM response.
- * Expects a fenced block like:
- *   ```json
- *   { "calendarInsert": true, "mode": "draft", "items": [...] }
- *   ```
- * or a single line containing the object. No trailing commas or comments.
+ * Supports:
+ * - <WORKOUT_JSON>{ "title", "sport", "date", "totalMinutes", "descriptionMarkdown" }</WORKOUT_JSON>
+ * - ```json { "calendarInsert": true, "mode", "items": [...] } ```
+ * - Inline { "calendarInsert": true ... }
  */
 export function parseCalendarInsertFromResponse(responseText: string): CalendarInsertPayload | null {
   const trimmed = responseText.trim();
 
-  // Try ```json ... ``` block first
+  // 1) <WORKOUT_JSON>...</WORKOUT_JSON> (single workout wrapper; text before/after allowed)
+  const workoutJsonBlock = trimmed.match(/<WORKOUT_JSON>\s*([\s\S]*?)<\/WORKOUT_JSON>/i);
+  if (workoutJsonBlock) {
+    try {
+      const raw = workoutJsonBlock[1].trim();
+      const parsed = JSON.parse(raw) as unknown;
+      const result = workoutJsonItemSchema.safeParse(parsed);
+      if (result.success) return payloadFromWorkoutJson(result.data);
+    } catch {
+      // fall through
+    }
+  }
+
+  // 2) ```json ... ``` block
   const jsonBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonBlock) {
     const raw = jsonBlock[1].trim();
@@ -50,7 +91,7 @@ export function parseCalendarInsertFromResponse(responseText: string): CalendarI
     }
   }
 
-  // Try inline { "calendarInsert": true ... }
+  // 3) Inline { "calendarInsert": true ... }
   const inline = trimmed.match(/\{\s*"calendarInsert"\s*:\s*true[\s\S]*\}/);
   if (inline) {
     try {

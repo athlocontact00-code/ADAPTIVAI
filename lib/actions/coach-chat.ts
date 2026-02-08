@@ -1086,3 +1086,45 @@ ${created.descriptionMd}`;
     },
   };
 }
+
+const FALLBACK_CALENDAR_USER_MESSAGE =
+  "Generate ONE complete session for today now. Include the CALENDAR BLOCK in the exact required format (markdown and JSON block with calendarInsert and items).";
+
+export type GenerateWorkoutAndAddToCalendarResult = {
+  success: boolean;
+  createdIds: string[];
+  error?: string;
+  generatedText?: string;
+};
+
+/**
+ * Fallback when user says "add to calendar" but the last assistant message has no extractable workout.
+ * Calls the coach with a single instruction to generate today's session with calendar block, then extracts and inserts.
+ */
+export async function generateWorkoutAndAddToCalendar(
+  history: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<GenerateWorkoutAndAddToCalendarResult> {
+  const result = await sendCoachMessage({
+    input: FALLBACK_CALENDAR_USER_MESSAGE,
+    history,
+  });
+  if (!result.ok) {
+    return { success: false, createdIds: [], error: result.error };
+  }
+  const payload = parseCalendarInsertFromResponse(result.text);
+  if (!payload || payload.items.length === 0) {
+    return {
+      success: false,
+      createdIds: [],
+      error: "Could not extract workout from response",
+      generatedText: result.text,
+    };
+  }
+  const insertResult = await insertDraftWorkoutsFromCalendarJson(payload, { forceMode: "final" });
+  return {
+    success: insertResult.success,
+    createdIds: insertResult.createdIds ?? [],
+    error: insertResult.error,
+    generatedText: result.text,
+  };
+}
