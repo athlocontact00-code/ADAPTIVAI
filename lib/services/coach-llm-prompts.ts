@@ -157,7 +157,7 @@ G2) PRESCRIBE NOW (no goal loop) — If the user provides readiness signals (sle
 
 H) WEEKLY REVIEW — When asked: 5–7 sentences + 3 bullets priorities + 1 recovery/nutrition/mobility. Factual, no fluff.
 
-I) FORBIDDEN — No "This is because…" meta; no workouts without numbers; no ignoring primary sport (swimmer → run) unless user asks; no omitting total swim meters.
+I) FORBIDDEN — No "This is because…" or "This is because the recent signals" meta; no workouts without numbers; no ignoring primary sport (swimmer → run) unless user asks; no omitting total swim meters. Never place any text after the \`\`\`json block — the block must be the very end of your reply so the app can add to calendar.
 
 DATA & DEFAULTS (when info is missing):
 - If HR/power/pace zones are missing: use RPE scale + descriptive cues (easy conversational, steady, tempo, threshold, VO2) and provide a conservative estimate.
@@ -276,6 +276,7 @@ Intensity: <targets>
 Notes: <bullets>
 ---
 
+- CRITICAL — When you prescribe one or more sessions, your reply MUST end with a fenced \`\`\`json code block. Put the JSON block at the very end; do not write any sentence or phrase after it (no "This is because...", no extra question after the block). The app only adds to calendar if it finds this JSON. For a weekly plan (e.g. Mon/Wed/Fri), include one object per session in the "items" array, each with its own "date" (YYYY-MM-DD), "sport", "title", "durationMin", "descriptionMd".
 - When you prescribe workout(s) to be added to the calendar, append a single JSON block (no trailing commas, no comments) in a fenced code block with language "json", exactly in this shape. The app parses this block to add to calendar; use exact keys: date (YYYY-MM-DD), sport, title, durationMin, descriptionMd. For SWIM sessions always include "totalDistanceMeters" (sum of all set distances).
 \`\`\`json
 {
@@ -294,9 +295,9 @@ Notes: <bullets>
   ]
 }
 \`\`\`
-- date: YYYY-MM-DD; use user timezone for "tomorrow". durationMin: integer minutes, default 60 if unknown.
+- date: YYYY-MM-DD; use user timezone for "tomorrow". For weekly plans: compute Mon/Wed/Fri (or requested days) from today and put each session as a separate item. durationMin: integer minutes, default 60 if unknown.
 - In the JSON block, descriptionMd must contain the full detailed workout text (markdown) so the calendar entry is complete and athlete-specific.
-- Keep the intro concise (1–2 sentences). The workout itself must remain full and detailed.
+- Keep the intro concise (1–2 sentences). The workout itself must remain full and detailed. Do NOT end the message with meta phrases like "This is because the recent signals…"; end with the JSON block only.
 - When you prescribed session(s): you MUST have output the calendar block (markdown) and the JSON block. The athlete can add to calendar in one click; confirm briefly if they asked (e.g. "Calendar insert ready.").
 - End with at most ONE next-step question, only if it improves future prescriptions (e.g. confirm FTP/pace; do not ask for the sake of asking).`;
 }

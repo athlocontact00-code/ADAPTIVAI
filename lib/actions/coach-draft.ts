@@ -8,6 +8,7 @@ import { parseDateToLocalNoon } from "@/lib/utils";
 import { parseCalendarInsertFromResponse } from "@/lib/schemas/coach-calendar-insert";
 import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
 import { parseSwimMetersFromText } from "@/lib/utils/swim-meters";
+import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
 
 const AI_DRAFT_SOURCE = "AI_DRAFT";
 const AI_FINAL_SOURCE = "AI";
@@ -160,15 +161,25 @@ export async function insertDraftWorkoutsFromCalendarJson(
 /**
  * Parse coach response text for calendarInsert JSON and insert into DB.
  * Used when user says "send to calendar" / "add to calendar" to persist the last prescribed workout.
+ * Tries: (1) JSON calendarInsert block, (2) text parser (calendar block / labeled / heuristic).
  * Revalidates /coach, /today, /calendar, /dashboard so Today and calendar refresh.
  */
 export async function insertWorkoutFromCoachResponse(
   responseText: string,
   options?: { forceMode?: "draft" | "final" }
 ): Promise<{ success: boolean; createdIds: string[]; error?: string }> {
-  const payload = parseCalendarInsertFromResponse(responseText);
+  const sanitized = sanitizeCoachText(responseText);
+  let payload = parseCalendarInsertFromResponse(sanitized);
   if (!payload || payload.items.length === 0) {
-    return { success: false, createdIds: [], error: "No workout found in the last message. Ask the coach to prescribe a session first, then say 'add to calendar'." };
+    const parsed = parseWorkoutFromText(sanitized);
+    if (parsed) payload = parsedWorkoutToPayload(parsed);
+  }
+  if (!payload || payload.items.length === 0) {
+    return {
+      success: false,
+      createdIds: [],
+      error: "I couldn't detect a workout to save. Please ask for a workout first (e.g. \"write me today's swim session\").",
+    };
   }
   const result = await insertDraftWorkoutsFromCalendarJson(payload, {
     forceMode: options?.forceMode ?? "final",

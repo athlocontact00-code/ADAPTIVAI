@@ -681,7 +681,7 @@ export default function SettingsPage() {
                         onAvatarChange={setAvatarUrl}
                       />
                       <div className="flex-1 min-w-0 space-y-1">
-                        <h3 className="text-base font-semibold">{profile.name || "Athlete"}</h3>
+                        <h3 className="text-base font-semibold">{profile.name || t("athleteFallback")}</h3>
                         {profile.club && <p className="text-sm text-muted-foreground">{profile.club}</p>}
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                           {profile.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{profile.location}</span>}
@@ -714,7 +714,7 @@ export default function SettingsPage() {
                     <SettingsField label="Email">
                       <Input className={cn(INPUT_CLASS, "opacity-70")} value={profile.email} disabled />
                     </SettingsField>
-                    <SettingsField label="Weight" hint="Used for intensity calculations">
+                    <SettingsField label={t("weight")} hint={t("weightHint")}>
                       <InputWithAdornment suffix="kg">
                         <Input
                           type="number"
@@ -724,7 +724,7 @@ export default function SettingsPage() {
                         />
                       </InputWithAdornment>
                     </SettingsField>
-                    <SettingsField label="Height">
+                    <SettingsField label={t("height")}>
                       <InputWithAdornment suffix="cm">
                         <Input
                           type="number"
@@ -738,12 +738,12 @@ export default function SettingsPage() {
                 </SettingsSectionCard>
 
                 <SettingsSectionCard
-                  title="Athlete Identity"
+                  title={t("athleteIdentity")}
                   icon={User}
-                  description="Club, location, timezone — helps AI personalize plans"
+                  description={t("athleteIdentityDesc")}
                 >
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <SettingsField label="Club / Team" hint="Optional">
+                    <SettingsField label={t("clubTeam")} hint={tCommon("optional")}>
                       <Input
                         className={INPUT_CLASS}
                         value={profile.club}
@@ -751,7 +751,7 @@ export default function SettingsPage() {
                         placeholder="e.g. City Running Club"
                       />
                     </SettingsField>
-                    <SettingsField label="Location" hint="City, country">
+                    <SettingsField label={t("location")} hint="City, country">
                       <Input
                         className={INPUT_CLASS}
                         value={profile.location}
@@ -759,7 +759,7 @@ export default function SettingsPage() {
                         placeholder="e.g. Warsaw, Poland"
                       />
                     </SettingsField>
-                    <SettingsField label="Timezone" hint="e.g. Europe/Warsaw">
+                    <SettingsField label={t("timezone")} hint="e.g. Europe/Warsaw">
                       <Input
                         className={INPUT_CLASS}
                         value={profile.timezone}
@@ -768,8 +768,8 @@ export default function SettingsPage() {
                       />
                     </SettingsField>
                     <SettingsField
-                      label="Birth year"
-                      hint="Year only (1930–2015). For age-based targets."
+                      label={t("birthYear")}
+                      hint={t("birthYearHint")}
                       error={profileErrors.birthYear}
                     >
                       <Input

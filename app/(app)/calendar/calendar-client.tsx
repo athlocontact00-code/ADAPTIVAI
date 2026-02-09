@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   Plus,
@@ -277,6 +278,7 @@ const WorkoutChip = memo(({
   onCheckIn,
   onFeedback,
 }: WorkoutChipProps) => {
+  const t = useTranslations("calendar");
   const statusClasses =
     status === "done"
       ? "bg-success-subtle border-success-subtle text-success"
@@ -321,7 +323,7 @@ const WorkoutChip = memo(({
                 DRAFT
               </Badge>
             </TooltipTrigger>
-            <TooltipContent>Draft workout — open to Finalize or Delete.</TooltipContent>
+            <TooltipContent>{t("draftWorkoutTooltip")}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
@@ -345,7 +347,7 @@ const WorkoutChip = memo(({
             "ml-1 h-1.5 w-1.5 rounded-full shrink-0",
             hasFeedback ? "bg-emerald-400" : "bg-amber-400"
           )}
-          title={hasFeedback ? "Feedback saved" : "Feedback missing"}
+          title={hasFeedback ? t("feedbackSaved") : t("feedbackMissing")}
         />
       )}
 
@@ -370,23 +372,23 @@ const WorkoutChip = memo(({
             }}
           >
             <Info className="mr-2 h-4 w-4" />
-            Workout detail
+            {t("workoutDetail")}
           </DropdownMenuItem>
           {workout.planned && !workout.completed && isToday && (
             <DropdownMenuItem onClick={() => onOpen(workout)}>
               <Activity className="mr-2 h-4 w-4" />
-              Start workout
+              {t("startWorkout")}
             </DropdownMenuItem>
           )}
           {workout.planned && !workout.completed && isToday && (
             <DropdownMenuItem onClick={() => onCheckIn(workout)}>
               <ClipboardCheck className="mr-2 h-4 w-4" />
-              Daily Check-In
+              {t("dailyCheckIn")}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={() => onToggleComplete(workout)}>
             <Check className="mr-2 h-4 w-4" />
-            {workout.completed ? "Mark incomplete" : "Mark complete"}
+            {workout.completed ? t("markedIncomplete") : t("markedComplete")}
           </DropdownMenuItem>
           {workout.completed && (
             <DropdownMenuItem onClick={() => onFeedback(workout)}>
@@ -446,6 +448,7 @@ const CalendarDayCell = memo(({
   onFeedback,
   hasFeedback,
 }: CalendarDayCellProps) => {
+  const t = useTranslations("calendar");
   const readiness = getReadinessTone(readinessScore);
   const visible = workouts.slice(0, maxVisible);
   const overflow = workouts.slice(maxVisible);
@@ -628,6 +631,7 @@ const CalendarSidePanel = memo(({
   onOpenCheckIn,
   onGenerateWeekPlan,
 }: CalendarSidePanelProps) => {
+  const t = useTranslations("calendar");
   const readiness = getReadinessTone(dayCheckIn?.readinessScore ?? null);
   const weekHours = formatHours((weeklySummary.totalDurationMin ?? 0) / 60);
   const weekPlannedHours = formatHours((weeklySummary.plannedDurationMin ?? 0) / 60);
@@ -778,7 +782,7 @@ const CalendarSidePanel = memo(({
                               variant="ghost"
                               className="h-7 w-7"
                               onClick={() => onOpenWorkout(w)}
-                              aria-label="Start workout"
+                              aria-label={t("startWorkout")}
                               disabled={!isTodaySelected || w.completed}
                             >
                               <Play className="h-3.5 w-3.5" />
@@ -788,7 +792,7 @@ const CalendarSidePanel = memo(({
                               variant="ghost"
                               className="h-7 w-7"
                               onClick={() => onEditWorkout(w)}
-                              aria-label="Edit workout"
+                              aria-label={t("editWorkout")}
                             >
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
@@ -1048,6 +1052,8 @@ export function CalendarClient({
   initialOpenWorkoutId,
 }: CalendarClientProps) {
   const router = useRouter();
+  const t = useTranslations("calendar");
+  const tCommon = useTranslations("common");
   const [workouts, setWorkouts] = useState<Workout[]>(initialWorkouts);
   const [checkIns, setCheckIns] = useState<CalendarCheckIn[]>(initialCheckIns);
   const [feedbackWorkoutIds, setFeedbackWorkoutIds] = useState<Set<string>>(
@@ -1349,7 +1355,7 @@ export function CalendarClient({
         return;
       }
 
-      toast.success(decision === "ACCEPT" ? "Change applied" : "Change declined");
+      toast.success(decision === "ACCEPT" ? t("changeApplied") : t("changeDeclined"));
       const res = await getCalendarMonthData(formatLocalDateInput(new Date(monthDate)));
       if (res.success && res.data) {
         setMonthDate(new Date(res.data.monthStart));
@@ -2008,11 +2014,11 @@ export function CalendarClient({
                             }
                           }}
                         >
-                          <Check className="h-4 w-4 mr-2" /> Finalize
+                          <Check className="h-4 w-4 mr-2" /> {t("finalize")}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem onClick={() => setPlanEditorOpen(true)}>
-                        <Edit className="h-4 w-4 mr-2" /> Edit plan
+                        <Edit className="h-4 w-4 mr-2" /> {t("editPlan")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={async () => {
@@ -2020,7 +2026,7 @@ export function CalendarClient({
                           await copyWorkoutPlan(w);
                         }}
                       >
-                        <Copy className="h-4 w-4 mr-2" /> Copy plan
+                        <Copy className="h-4 w-4 mr-2" /> {t("copyPlan")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
@@ -2028,7 +2034,7 @@ export function CalendarClient({
                           setWorkoutDetailOpen(false);
                         }}
                       >
-                        <Edit className="h-4 w-4 mr-2" /> Edit workout details
+                        <Edit className="h-4 w-4 mr-2" /> {t("editWorkoutDetails")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
@@ -2037,7 +2043,7 @@ export function CalendarClient({
                           setWorkoutDetailOpen(false);
                         }}
                       >
-                        <Trash2 className="h-4 w-4 mr-2" /> Delete
+                        <Trash2 className="h-4 w-4 mr-2" /> {tCommon("delete")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -2115,11 +2121,11 @@ export function CalendarClient({
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-500" />
                           <div>
-                            <div className="font-medium">Pending plan change</div>
+                            <div className="font-medium">{t("pendingPlanChange")}</div>
                             <div className="text-xs text-muted-foreground whitespace-pre-wrap">
                               {proposalLoading
-                                ? "Loading proposal…"
-                                : pendingProposals[0]?.summary || "A plan change proposal is pending."}
+                                ? t("loadingProposal")
+                                : pendingProposals[0]?.summary || t("proposalPending")}
                             </div>
                           </div>
                         </div>
@@ -2169,11 +2175,11 @@ export function CalendarClient({
                               }}
                             >
                               <Copy className="h-4 w-4 mr-2" />
-                              Copy
+                              {tCommon("copy")}
                             </Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => setPlanEditorOpen(true)}>
                               <Edit className="h-4 w-4 mr-2" />
-                              Edit plan
+                              {t("editPlan")}
                             </Button>
                           </div>
                         </div>
@@ -2182,9 +2188,9 @@ export function CalendarClient({
 
                         {!hasPlan ? (
                           <div className="rounded-card border bg-muted/20 p-4">
-                            <div className="text-sm font-medium">No plan yet</div>
+                            <div className="text-sm font-medium">{t("noPlanYet")}</div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              Generate a structured prescription with Coach or add your own.
+                              {t("noPlanYetHint")}
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <Button
@@ -2193,11 +2199,11 @@ export function CalendarClient({
                                 onClick={() => router.push(`/coach?prefill=${encodeURIComponent(coachPrefill)}`)}
                               >
                                 <Bot className="h-4 w-4 mr-2" />
-                                Generate with Coach
+                                {t("generateWithCoach")}
                               </Button>
                               <Button type="button" onClick={() => setPlanEditorOpen(true)}>
                                 <Edit className="h-4 w-4 mr-2" />
-                                Create plan
+                                {t("createPlan")}
                               </Button>
                             </div>
                           </div>
@@ -2209,7 +2215,7 @@ export function CalendarClient({
 
                         {v1?.why && v1.why.trim().length > 0 && (
                           <div className="mt-4 rounded-card border bg-muted/10 p-3">
-                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">Coach note</div>
+                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">{t("coachNote")}</div>
                             <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{v1.why}</div>
                           </div>
                         )}
@@ -2220,7 +2226,7 @@ export function CalendarClient({
                     <div className="space-y-4">
                       <div className="rounded-card border bg-muted/10 p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <div className="text-sm font-semibold">Metrics</div>
+                          <div className="text-sm font-semibold">{t("metrics")}</div>
                           <Badge variant="muted" className="capitalize">
                             {w.type}
                           </Badge>
@@ -2228,13 +2234,13 @@ export function CalendarClient({
 
                         <div className="grid grid-cols-2 gap-3 text-xs">
                           <div className="rounded-control border bg-background/30 p-3">
-                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">Duration</div>
+                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">{t("duration")}</div>
                             <div className="mt-1 font-medium tabular-nums">
                               {typeof w.durationMin === "number" && w.durationMin > 0 ? `${w.durationMin} min` : "—"}
                             </div>
                           </div>
                           <div className="rounded-control border bg-background/30 p-3">
-                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">Distance</div>
+                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">{t("distance")}</div>
                             <div className="mt-1 font-medium tabular-nums">
                               {typeof w.distanceKm === "number" && w.distanceKm > 0
                                 ? `${Math.round(w.distanceKm * 10) / 10} km`
@@ -2244,20 +2250,20 @@ export function CalendarClient({
                             </div>
                           </div>
                           <div className="rounded-control border bg-background/30 p-3">
-                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">TSS</div>
+                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">{t("tss")}</div>
                             <div className="mt-1 font-medium tabular-nums">
                               {typeof w.tss === "number" && w.tss > 0 ? w.tss : "—"}
                             </div>
                           </div>
                           <div className="rounded-control border bg-background/30 p-3">
-                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">Targets</div>
+                            <div className="text-2xs uppercase tracking-wide text-muted-foreground">{t("targets")}</div>
                             <div className="mt-1 font-medium tabular-nums">{targetsPreview ?? "—"}</div>
                           </div>
                         </div>
                       </div>
 
                       <div className="rounded-card border bg-muted/10 p-4 space-y-3">
-                        <div className="text-sm font-semibold">Actions</div>
+                        <div className="text-sm font-semibold">{t("actions")}</div>
                         <div className="grid gap-2">
                           <Button
                             onClick={async () => {
@@ -2268,8 +2274,8 @@ export function CalendarClient({
                                   source: "pretraining_gate",
                                   properties: { workoutId: w.id },
                                 });
-                                toast.error("Pre-training check required", {
-                                  description: "Complete check-in or skip with reason",
+                                toast.error(t("preTrainingCheckRequired"), {
+                                  description: t("preTrainingCheckRequiredDesc"),
                                 });
                                 return;
                               }
@@ -2292,18 +2298,18 @@ export function CalendarClient({
                                 },
                               });
 
-                              toast.success("Workout started");
+                              toast.success(t("workoutStartedToast"));
                               setWorkoutDetailOpen(false);
                             }}
                             disabled={!!gate?.required && !gate.checkInDone && !gate.skipped}
                           >
-                            Start workout
+                            {t("startWorkout")}
                           </Button>
 
                           <div className="grid grid-cols-2 gap-2">
                             <Button type="button" variant="outline" onClick={() => setPlanEditorOpen(true)}>
                               <Edit className="h-4 w-4 mr-2" />
-                              Edit plan
+                              {t("editPlan")}
                             </Button>
                             <Button
                               type="button"
@@ -2311,7 +2317,7 @@ export function CalendarClient({
                               onClick={() => router.push(`/coach?prefill=${encodeURIComponent(coachPrefill)}`)}
                             >
                               <Bot className="h-4 w-4 mr-2" />
-                              Generate
+                              {t("generate")}
                             </Button>
                           </div>
                         </div>

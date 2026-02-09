@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Bot, Loader2, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -48,6 +49,8 @@ export function WorkoutPlanEditorModal({
   onSaved?: (updated: { descriptionMd: string | null; prescriptionJson: string | null }) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("workoutEditor");
+  const tCommon = useTranslations("common");
   const [mode, setMode] = useState<"structured" | "text">("structured");
   const [structured, setStructured] = useState<StructuredWorkoutPlan>(() => emptyPlan());
   const [text, setText] = useState<string>("");
@@ -110,7 +113,7 @@ export function WorkoutPlanEditorModal({
       setMode("structured");
       setStructured(res.result.plannedPlan);
       setText(exportStructuredToText(res.result.plannedPlan));
-      toast.success("Coach plan generated");
+      toast.success(t("coachPlanGenerated"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to generate coach plan";
       toast.error(msg);
@@ -122,8 +125,8 @@ export function WorkoutPlanEditorModal({
   async function handleApplyCoachPlan() {
     if (!workout || !coachResult) return;
     if (preview.kind === "text_only") {
-      toast.error("Text plan can’t be applied yet", {
-        description: "Switch to Structured mode or make the text parseable first.",
+      toast.error(t("textPlanCantApply"), {
+        description: t("textPlanCantApplyDesc"),
       });
       return;
     }
@@ -140,14 +143,14 @@ export function WorkoutPlanEditorModal({
       if (!res.ok) throw new Error(res.error || "Failed to apply");
 
       if (res.applied === "PROPOSED") {
-        toast.success("Plan is locked — proposal created", {
-          description: "Open the workout in Calendar to accept/decline.",
+        toast.success(t("planLockedProposal"), {
+          description: t("planLockedProposalDesc"),
         });
       } else {
         const planJson = stringifyStructuredWorkoutPlan(planToApply);
         const planText = exportStructuredToText(planToApply);
         onSaved?.({ prescriptionJson: planJson, descriptionMd: planText.length > 0 ? planText : null });
-        toast.success("Coach plan applied");
+        toast.success(t("coachPlanApplied"));
       }
 
       router.refresh();
@@ -191,7 +194,7 @@ export function WorkoutPlanEditorModal({
       const responseBody = (await res.json().catch(() => null)) as null | { error?: string };
       if (!res.ok) throw new Error(responseBody?.error || "Failed to save plan");
 
-      toast.success("Plan saved");
+      toast.success(t("planSaved"));
       onSaved?.(payload);
       onOpenChange(false);
     } catch (e) {
@@ -209,7 +212,7 @@ export function WorkoutPlanEditorModal({
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
             <div className="flex items-start justify-between gap-4 pr-10">
               <div className="min-w-0">
-                <DialogTitle className="text-xl truncate">Edit plan</DialogTitle>
+                <DialogTitle className="text-xl truncate">{t("editPlan")}</DialogTitle>
                 {workout && (
                   <div className="mt-1 text-xs text-muted-foreground truncate">
                     {workout.title} • {dateLabel} • {disciplineLabel}
@@ -224,7 +227,7 @@ export function WorkoutPlanEditorModal({
                   disabled={generatingCoach || applyingCoach || !workout}
                 >
                   {generatingCoach ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
-                  Generate with Coach
+                  {t("generateWithCoach")}
                 </Button>
               </div>
             </div>
@@ -236,8 +239,8 @@ export function WorkoutPlanEditorModal({
                 className="w-full"
               >
                 <TabsList className="w-full sm:w-auto">
-                  <TabsTrigger value="structured">Structured</TabsTrigger>
-                  <TabsTrigger value="text">Text (advanced)</TabsTrigger>
+                  <TabsTrigger value="structured">{t("structured")}</TabsTrigger>
+                  <TabsTrigger value="text">{t("textAdvanced")}</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -245,10 +248,10 @@ export function WorkoutPlanEditorModal({
             {coachResult && (
               <div className="mt-4 rounded-card border bg-muted/10 p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Coach output</div>
+                  <div className="text-sm font-semibold">{t("coachOutput")}</div>
                   {coachResult.adjustedPlan && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Use adjusted version</span>
+                      <span className="text-xs text-muted-foreground">{t("useAdjustedVersion")}</span>
                       <Switch
                         checked={useAdjusted}
                         onCheckedChange={(checked) => {
@@ -290,10 +293,10 @@ export function WorkoutPlanEditorModal({
                     {applyingCoach ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Applying…
+                        {t("applying")}
                       </>
                     ) : (
-                      "Apply coach plan"
+                      t("applyCoachPlan")
                     )}
                   </Button>
                 </div>
@@ -316,10 +319,10 @@ export function WorkoutPlanEditorModal({
                     <div className="rounded-card border bg-muted/10 p-3">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="h-4 w-4 text-muted-foreground" />
-                        Text mode
+                        {t("textMode")}
                       </div>
                       <div className="mt-1 text-2xs text-muted-foreground">
-                        Paste anything. On save we store the text and try a best-effort parse to structured blocks.
+                        {t("textModeDesc")}
                       </div>
                       <div className="mt-3">
                         <Button
@@ -334,7 +337,7 @@ export function WorkoutPlanEditorModal({
                           ) : (
                             <Bot className="h-4 w-4 mr-2" />
                           )}
-                          Convert to structured (AI)
+                          {t("convertToStructuredAi")}
                         </Button>
                       </div>
                     </div>
@@ -351,15 +354,15 @@ export function WorkoutPlanEditorModal({
 
               <div className="border-t lg:border-t-0 lg:border-l border-border/60 bg-muted/5 overflow-y-auto px-6 py-5">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Rendered plan</div>
+                  <div className="text-sm font-semibold">{t("renderedPlan")}</div>
                   {preview.kind === "parsed_text" && (
                     <Badge variant="info" className="tabular-nums">
-                      parsed
+                      {t("parsed")}
                     </Badge>
                   )}
                   {preview.kind === "text_only" && (
                     <Badge variant="muted" className="tabular-nums">
-                      formatted text
+                      {t("formattedText")}
                     </Badge>
                   )}
                 </div>
@@ -381,16 +384,16 @@ export function WorkoutPlanEditorModal({
               </div>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-                  Cancel
+                  {tCommon("cancel")}
                 </Button>
                 <Button type="button" onClick={handleSave} disabled={saving || !workout}>
                   {saving ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving…
+                      {t("saving")}
                     </>
                   ) : (
-                    "Save plan"
+                    t("savePlan")
                   )}
                 </Button>
               </div>

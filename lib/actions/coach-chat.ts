@@ -36,6 +36,7 @@ import {
   validateSwimMetersCompleteness,
   deriveExpectedSport,
 } from "@/lib/utils/coach-gates";
+import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
 
 export type CoachContextOverrides = {
   useCheckInData?: boolean;
@@ -1005,8 +1006,7 @@ ${created.descriptionMd}`;
 
     confidence = /\bnot (entirely )?sure\b/i.test(text) || /\blow confidence\b/i.test(text) ? 60 : 80;
 
-    const becauseSeed = "the recent signals and plan summary in your context";
-    text = ensureBecauseReasoning(text, becauseSeed);
+    text = sanitizeCoachText(text);
     text = applyConfidenceGuardrail(text, confidence);
 
     const alreadyAdmitsUncertainty =
@@ -1094,6 +1094,9 @@ ${created.descriptionMd}`;
 const FALLBACK_CALENDAR_USER_MESSAGE =
   "Generate ONE complete session for today now. Your reply MUST end with a ```json code block containing this exact structure: {\"calendarInsert\":true,\"mode\":\"final\",\"items\":[{\"date\":\"YYYY-MM-DD\",\"sport\":\"RUN\",\"title\":\"...\",\"durationMin\":45,\"descriptionMd\":\"...\"}]}. Use today's date for date. Include full workout text in descriptionMd.";
 
+const STRICT_JSON_ONLY_MESSAGE =
+  "Re-export ONLY the last workout you prescribed as a single ```json code block. Output nothing else. Format: {\"calendarInsert\":true,\"mode\":\"final\",\"items\":[{\"date\":\"YYYY-MM-DD\",\"sport\":\"RUN\" or \"SWIM\" or \"BIKE\" or \"STRENGTH\",\"title\":\"...\",\"durationMin\":60,\"descriptionMd\":\"full markdown workout\"}]}. Use today's date.";
+
 export type GenerateWorkoutAndAddToCalendarResult = {
   success: boolean;
   createdIds: string[];
@@ -1101,9 +1104,18 @@ export type GenerateWorkoutAndAddToCalendarResult = {
   generatedText?: string;
 };
 
+function extractPayloadFromText(text: string): ReturnType<typeof parseCalendarInsertFromResponse> {
+  const sanitized = sanitizeCoachText(text);
+  const payload = parseCalendarInsertFromResponse(sanitized);
+  if (payload && payload.items.length > 0) return payload;
+  const parsed = parseWorkoutFromText(sanitized);
+  if (parsed) return parsedWorkoutToPayload(parsed);
+  return null;
+}
+
 /**
  * Fallback when user says "add to calendar" but the last assistant message has no extractable workout.
- * Calls the coach with a single instruction to generate today's session with calendar block, then extracts and inserts.
+ * Calls the coach to generate today's session; if parsing fails, retries once with strict JSON-only prompt.
  */
 export async function generateWorkoutAndAddToCalendar(
   history: Array<{ role: "user" | "assistant"; content: string }>
@@ -1115,13 +1127,24 @@ export async function generateWorkoutAndAddToCalendar(
   if (!result.ok) {
     return { success: false, createdIds: [], error: result.error };
   }
-  const payload = parseCalendarInsertFromResponse(result.text);
+  let payload = extractPayloadFromText(result.text);
+  let generatedText = result.text;
+  if (!payload || payload.items.length === 0) {
+    const retryResult = await sendCoachMessage({
+      input: STRICT_JSON_ONLY_MESSAGE,
+      history: [...history, { role: "assistant", content: result.text }, { role: "user", content: STRICT_JSON_ONLY_MESSAGE }],
+    });
+    if (retryResult.ok) {
+      payload = extractPayloadFromText(retryResult.text);
+      if (retryResult.text) generatedText = retryResult.text;
+    }
+  }
   if (!payload || payload.items.length === 0) {
     return {
       success: false,
       createdIds: [],
-      error: "Could not extract workout from response",
-      generatedText: result.text,
+      error: "I couldn't detect a workout to save. Please ask for a workout first (e.g. \"write me today's swim session\").",
+      generatedText,
     };
   }
   const insertResult = await insertDraftWorkoutsFromCalendarJson(payload, { forceMode: "final" });
@@ -1129,6 +1152,6 @@ export async function generateWorkoutAndAddToCalendar(
     success: insertResult.success,
     createdIds: insertResult.createdIds ?? [],
     error: insertResult.error,
-    generatedText: result.text,
+    generatedText,
   };
 }

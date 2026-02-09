@@ -11,6 +11,10 @@ describe("isSendToCalendarIntent", () => {
   it("returns true for Polish", () => {
     expect(isSendToCalendarIntent("wklej do kalendarza")).toBe(true);
     expect(isSendToCalendarIntent("dodaj do kalendarza")).toBe(true);
+    expect(isSendToCalendarIntent("wrzuć do kalendarza")).toBe(true);
+    expect(isSendToCalendarIntent("wrzuć do kalendarza aby zapisać")).toBe(true);
+    expect(isSendToCalendarIntent("zapisz do kalendarza")).toBe(true);
+    expect(isSendToCalendarIntent("zapisać w kalendarz")).toBe(true);
   });
 
   it("returns false for unrelated messages", () => {
