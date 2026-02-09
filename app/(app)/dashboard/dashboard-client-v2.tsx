@@ -248,15 +248,15 @@ export function DashboardClientV2({
   const nextAction = retentionSummary?.nextAction;
   const streaks = retentionSummary?.streaks;
 
-  const readinessScore = typeof readinessData?.score === "number" ? readinessData.score : metrics.readiness;
-  const hasReadiness = typeof readinessScore === "number";
+  const readinessScore = readinessData?.score ?? null;
+  const hasReadiness = readinessData != null && typeof readinessData.score === "number";
   const topFactor = readinessData?.factors?.[0]?.description;
 
   const _readinessVariant = !hasReadiness
     ? "default"
-    : readinessScore >= 70
+    : (readinessScore ?? 0) >= 70
     ? "success"
-    : readinessScore >= 45
+    : (readinessScore ?? 0) >= 45
     ? "warning"
     : "danger";
 
@@ -690,11 +690,11 @@ export function DashboardClientV2({
         <div className="lg:col-span-4 grid grid-cols-2 gap-3">
           <MetricCard
             title="Readiness"
-            value={hasReadiness ? Math.round(readinessScore) : "—"}
+            value={hasReadiness ? Math.round(readinessScore as number) : "—"}
             unit={hasReadiness ? "%" : undefined}
-            hint={topFactor || (hasReadiness ? "Based on recent signals" : "Complete check-in")}
+            hint={topFactor || (hasReadiness ? "Based on recent signals" : "No readiness data yet — complete check-in")}
             sparkline={readinessSparkline.length >= 2 ? readinessSparkline : null}
-            tone={!hasReadiness ? "neutral" : readinessScore >= 70 ? "success" : readinessScore >= 45 ? "warning" : "danger"}
+            tone={!hasReadiness ? "neutral" : (readinessScore ?? 0) >= 70 ? "success" : (readinessScore ?? 0) >= 45 ? "warning" : "danger"}
             tooltip="Readiness estimates how prepared you are to handle intensity today (sleep, fatigue, stress, and recent load)."
             density={density}
           />

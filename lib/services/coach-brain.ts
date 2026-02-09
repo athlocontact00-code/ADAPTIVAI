@@ -4,6 +4,7 @@
  * No new UI; used by coach-chat and calendar insertion.
  */
 
+import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { addDays, startOfDay, parseDateToLocalNoon } from "@/lib/utils";
 import { buildAIContextForUser } from "@/lib/services/ai-context.builder";
@@ -23,6 +24,7 @@ import type {
   RubricStep,
   WhyDrivers,
 } from "@/lib/schemas/coach-rubric";
+import { logError, logInfo } from "@/lib/logger";
 
 const MAX_HARD_SESSIONS_PER_WEEK = 2;
 const RAMP_THRESHOLD = DEFAULT_RAMP_THRESHOLD;
@@ -181,20 +183,34 @@ export function resolveSessionIntent(
   const durationMatch = lower.match(/(\d{1,3})\s*min(?:ute)?s?/);
   const durationMinHint = durationMatch ? parseInt(durationMatch[1], 10) : undefined;
 
+  const metersMatch = lower.match(/\b(\d{2,4})\s*m\b/);
+  const targetMeters = metersMatch && (sport === "SWIM" || !sport) ? parseInt(metersMatch[1], 10) : undefined;
+
+  const replaceIntent =
+    /\b(change|modify|replace|zmień|zmien|zrób\s+\d+\s*m\s*(zamiast)?)\b/i.test(lower) &&
+    (/\b(it|tomorrow|jutro|workout|trening|session)\b/i.test(lower) || targetMeters != null);
+
   const isSingleRequest =
     isAddWorkoutRequest(lower) ||
-    /\b(give me|get me|plan|schedule|add|create|want)\s+(a\s+)?(run|bike|swim|strength|workout|session)\b/i.test(lower) ||
-    (sport !== undefined && /\b(for|on|tomorrow|today)\b/.test(lower));
+    /\b(give me|get me|plan|schedule|add|create|want|write|generate)\s+(a\s+)?(run|bike|swim|strength|workout|session)\b/i.test(lower) ||
+    (sport !== undefined && /\b(for|on|tomorrow|today)\b/.test(lower)) ||
+    (targetMeters != null && (sport === "SWIM" || /\b(swim|pływanie)\b/i.test(lower))) ||
+    (replaceIntent && (targetMeters != null || sport !== undefined));
 
   if (!isSingleRequest && !sport) return null;
 
+  const resolvedSport =
+    sport ?? (targetMeters != null ? "SWIM" : "RUN");
+
   return {
     kind: "single",
-    sport: sport ?? "RUN",
+    sport: resolvedSport,
     date: dateStr,
     addToCalendar: !noCalendar,
     createSeparate,
     durationMinHint,
+    targetMeters: targetMeters && targetMeters >= 100 && targetMeters <= 10000 ? targetMeters : undefined,
+    replaceIntent: replaceIntent || false,
   };
 }
 
@@ -237,7 +253,8 @@ export function generateRubricPrescription(
     warmupMin,
     mainMin,
     cooldownMin,
-    context
+    context,
+    sport === "SWIM" && intent.targetMeters != null ? { requestedTotalMeters: intent.targetMeters } : undefined
   );
 
   const rationale = isLowReadiness
@@ -336,7 +353,8 @@ function buildBlocksBySport(
   warmupMin: number,
   mainMin: number,
   cooldownMin: number,
-  context: CoachBrainContext
+  context: CoachBrainContext,
+  options?: { requestedTotalMeters?: number }
 ): {
   warmup: RubricStep[];
   main: RubricStep[];
@@ -418,7 +436,6 @@ function buildBlocksBySport(
   if (sport === "SWIM") {
     const poolLen = context.aiContext.userProfile.swimPoolLengthM ?? 25;
     const swimLevel = (context.aiContext.userProfile.swimLevel as string) || "age_group";
-    // Meter ranges: beginner 800–1600, age_group 1600–2800, advanced 2500–4000, expert 3500–5500+
     const totalRange =
       swimLevel === "beginner"
         ? { min: 800, max: 1600 }
@@ -427,24 +444,27 @@ function buildBlocksBySport(
           : swimLevel === "expert"
             ? { min: 3500, max: 5500 }
             : { min: 1600, max: 2800 };
-    const totalMeters = Math.min(
-      totalRange.max,
-      Math.max(totalRange.min, Math.round((mainMin * 40) / 5) * 5)
-    );
+    const totalMeters =
+      options?.requestedTotalMeters != null && options.requestedTotalMeters >= 100 && options.requestedTotalMeters <= 10000
+        ? options.requestedTotalMeters
+        : Math.min(totalRange.max, Math.max(totalRange.min, Math.round((mainMin * 40) / 5) * 5));
     const warmupM = swimLevel === "beginner" ? 200 : swimLevel === "advanced" || swimLevel === "expert" ? 400 : 300;
     const warmup1M = Math.min(poolLen * 2, 100);
-    const warmup2M = swimLevel === "beginner" ? 150 : 200; // 3x50 beginner, 4x50 else
+    const warmup2M = swimLevel === "beginner" ? 150 : 200;
     const warmup3M = Math.max(0, warmupM - warmup1M - warmup2M);
     const mainM = totalMeters - warmupM - 100;
-    const cooldownM = 100;
 
-    return {
-      title:
-        swimLevel === "beginner"
+    const title =
+      options?.requestedTotalMeters != null
+        ? `Swim ${options.requestedTotalMeters}m`
+        : swimLevel === "beginner"
           ? "Technique-Focus Swim"
           : swimLevel === "expert"
             ? "Structured Swim"
-            : "Technique & Endurance Swim",
+            : "Technique & Endurance Swim";
+
+    return {
+      title,
       goal:
         swimLevel === "beginner"
           ? "Stroke efficiency and comfort in the water."
@@ -768,19 +788,60 @@ function rubricToCalendarItemInternal(
   return { descriptionMd, prescriptionJson };
 }
 
+export type SaveWorkoutMode = "create" | "replace" | "upsert";
+
+/** Explicit save result: exactly one of created/updated/reused is true; reason explains outcome. */
+export type SaveWorkoutResult = {
+  workoutId: string;
+  created: boolean;
+  updated: boolean;
+  reused: boolean;
+  reason: string;
+};
+
+/** Hash payload (title, description, distance, duration, prescription) for compare — no system fields. */
+function payloadHash(p: {
+  title: string;
+  durationMin: number;
+  distanceM: number | null | undefined;
+  descriptionMd: string;
+  prescriptionJson: string;
+}): string {
+  const canonical = JSON.stringify({
+    title: p.title,
+    durationMin: p.durationMin,
+    distanceM: p.distanceM ?? null,
+    descriptionMd: p.descriptionMd,
+    prescriptionJson: p.prescriptionJson,
+  });
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
 /**
- * Idempotent save: find by (userId, date same day, type); if exists and !createSeparate, update; else create.
- * Returns { workoutId, created }.
+ * Save workout: find by (userId, date same day, type). Behavior by mode:
+ * - create: always insert new (ignore existing).
+ * - replace: if existing, compare payload hash; if different => update (updated:true); if same => reused:true.
+ * - upsert: if existing and !createSeparate, same as replace; else create.
+ * Returns { workoutId, created, updated, reused, reason }. Never silent reuse when payload differs.
  */
 export async function saveWorkoutIdempotent(
   userId: string,
   prescription: WorkoutRubricPrescription,
-  options: { createSeparate?: boolean; source?: string; includeResultTemplate?: boolean } = {}
-): Promise<{ workoutId: string; created: boolean }> {
+  options: {
+    createSeparate?: boolean;
+    source?: string;
+    includeResultTemplate?: boolean;
+    mode?: SaveWorkoutMode;
+    reason?: string;
+    targetMeters?: number;
+  } = {}
+): Promise<SaveWorkoutResult> {
   const date = parseDateToLocalNoon(prescription.date);
   const type = sportToType(prescription.sport);
   const dayStart = startOfDay(date);
   const dayEnd = addDays(dayStart, 1);
+  const mode = options.mode ?? "upsert";
+  const targetSport = prescription.sport;
 
   const existing = await db.workout.findFirst({
     where: {
@@ -789,7 +850,14 @@ export async function saveWorkoutIdempotent(
       type,
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true },
+    select: {
+      id: true,
+      title: true,
+      descriptionMd: true,
+      durationMin: true,
+      distanceM: true,
+      prescriptionJson: true,
+    },
   });
 
   const item = rubricToCalendarItemInternal(prescription, {
@@ -804,21 +872,96 @@ export async function saveWorkoutIdempotent(
         ) || undefined
       : undefined;
 
-  if (existing && !options.createSeparate) {
+  const prescriptionJsonStr = JSON.stringify(item.prescriptionJson);
+  const updatePayload = {
+    title: prescription.title,
+    durationMin: prescription.durationMin,
+    distanceM,
+    descriptionMd: item.descriptionMd,
+    prescriptionJson: prescriptionJsonStr,
+    source,
+    aiGenerated: true,
+    planned: true,
+  };
+
+  const shouldConsiderUpdate =
+    existing &&
+    (mode === "replace" || (mode === "upsert" && !options.createSeparate));
+
+  if (shouldConsiderUpdate && existing) {
+    const newHash = payloadHash({
+      title: prescription.title,
+      durationMin: prescription.durationMin,
+      distanceM: distanceM ?? null,
+      descriptionMd: item.descriptionMd,
+      prescriptionJson: prescriptionJsonStr,
+    });
+    const existingHash = payloadHash({
+      title: existing.title,
+      durationMin: existing.durationMin ?? 0,
+      distanceM: existing.distanceM ?? null,
+      descriptionMd: existing.descriptionMd ?? "",
+      prescriptionJson: existing.prescriptionJson ?? "{}",
+    });
+
+    if (newHash === existingHash) {
+      const reason = options.reason ?? "payload unchanged; reused existing";
+      logInfo("coach-brain.save", {
+        mode,
+        targetMeters: options.targetMeters,
+        targetSport,
+        existingId: existing.id,
+        created: false,
+        updated: false,
+        reused: true,
+        reason,
+      });
+      return {
+        workoutId: existing.id,
+        created: false,
+        updated: false,
+        reused: true,
+        reason,
+      };
+    }
+
     await db.workout.update({
       where: { id: existing.id },
-      data: {
-        title: prescription.title,
-        durationMin: prescription.durationMin,
-        distanceM,
-        descriptionMd: item.descriptionMd,
-        prescriptionJson: JSON.stringify(item.prescriptionJson),
-        source,
-        aiGenerated: true,
-        planned: true,
-      },
+      data: updatePayload,
     });
-    return { workoutId: existing.id, created: false };
+    const reason = options.reason ?? "payload changed; updated existing";
+    logInfo("coach-brain.save", {
+      mode,
+      targetMeters: options.targetMeters,
+      targetSport,
+      existingId: existing.id,
+      created: false,
+      updated: true,
+      reused: false,
+      reason,
+      previousTitle: existing.title,
+      newTitle: prescription.title,
+    });
+    return {
+      workoutId: existing.id,
+      created: false,
+      updated: true,
+      reused: false,
+      reason,
+    };
+  }
+
+  if (mode === "create" && existing) {
+    logInfo("coach-brain.save", {
+      mode: "create",
+      targetMeters: options.targetMeters,
+      targetSport,
+      existingId: existing.id,
+      created: false,
+      updated: false,
+      reused: false,
+      reason: options.reason ?? "create requested but existing found; creating separate",
+    });
   }
 
   const created = await db.workout.create({
@@ -834,11 +977,31 @@ export async function saveWorkoutIdempotent(
       aiGenerated: true,
       source,
       descriptionMd: item.descriptionMd,
-      prescriptionJson: JSON.stringify(item.prescriptionJson),
+      prescriptionJson: prescriptionJsonStr,
     },
     select: { id: true },
   });
-  return { workoutId: created.id, created: true };
+  const reason =
+    options.reason ?? (existing ? "createSeparate or create mode" : "no existing workout");
+  logInfo("coach-brain.save", {
+    mode,
+    targetMeters: options.targetMeters,
+    targetSport,
+    existingId: existing?.id,
+    created: true,
+    updated: false,
+    reused: false,
+    reason,
+    workoutId: created.id,
+    title: prescription.title,
+  });
+  return {
+    workoutId: created.id,
+    created: true,
+    updated: false,
+    reused: false,
+    reason,
+  };
 }
 
 /**
@@ -891,32 +1054,53 @@ export async function generateAndSaveWorkout(
       };
     }
 
-    const { workoutId, created } = await saveWorkoutIdempotent(userId, prescription, {
+    if (intent.targetMeters != null && prescription.sport === "SWIM") {
+      const prescriptionTotal =
+        [...prescription.warmup, ...prescription.main, ...prescription.cooldown].reduce(
+          (sum, s) => sum + (s.distanceM ?? 0),
+          0
+        );
+      if (prescriptionTotal !== intent.targetMeters) {
+        logInfo("coach-brain.save", {
+          reason: "targetMeters mismatch; not saving template",
+          targetMeters: intent.targetMeters,
+          prescriptionTotal,
+        });
+        return {
+          success: false,
+          error: "Prescription total meters does not match request; use chat for custom workout.",
+        };
+      }
+    }
+
+    const mode: SaveWorkoutMode =
+      intent.replaceIntent || intent.targetMeters != null ? "replace" : "upsert";
+    const saveReason =
+      intent.replaceIntent
+        ? "user asked to change/replace"
+        : intent.targetMeters != null
+          ? "user requested specific meters"
+          : "default rubric (no targetMeters)";
+    const saveResult = await saveWorkoutIdempotent(userId, prescription, {
       createSeparate: intent.createSeparate,
       source: options.source ?? "AI",
       includeResultTemplate,
-    });
-
-    console.log("[coach-brain] save", {
-      userId,
-      workoutId,
-      created,
-      sport: prescription.sport,
-      date: prescription.date,
-      title: prescription.title,
+      mode,
+      reason: saveReason,
+      targetMeters: intent.targetMeters ?? undefined,
     });
 
     return {
       success: true,
-      workoutId,
-      created,
-      createdWorkoutIds: [workoutId],
+      workoutId: saveResult.workoutId,
+      created: saveResult.created,
+      createdWorkoutIds: [saveResult.workoutId],
       markdown,
       title: prescription.title,
       warnings,
     };
   } catch (err) {
-    console.error("[coach-brain] generateAndSaveWorkout failed:", err);
+    logError("coach-brain.generateAndSaveWorkout.failed", { userId }, err instanceof Error ? err : undefined);
     return {
       success: false,
       error: err instanceof Error ? err.message : "Generation failed",

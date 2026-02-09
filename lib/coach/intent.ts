@@ -17,6 +17,9 @@ export type CoachIntentMode =
   | "add_to_calendar"
   | "generate_and_add";
 
+/** Action intent for routing: when to generate, when to only save draft, when to skip save. */
+export type CoachActionIntent = "GENERATE" | "CHANGE" | "ADD_TO_CALENDAR" | "QUESTION_ONLY";
+
 export type CoachIntentResult = {
   sport: SportIntent | "UNKNOWN";
   targetDateISO: string | null;
@@ -27,6 +30,25 @@ export type CoachIntentResult = {
   /** Raw constraints for backward compatibility */
   raw: CoachIntent;
 };
+
+/**
+ * Derive routing action: GENERATE (generate + save), CHANGE (replace existing), ADD_TO_CALENDAR (save last draft only), QUESTION_ONLY (no save).
+ */
+export function getCoachActionIntent(
+  message: string,
+  intent: CoachIntentResult
+): CoachActionIntent {
+  const lower = message.trim().toLowerCase();
+  const questionOnly =
+    message.length < 120 &&
+    /\b(why|how|what|which|dlaczego|jak|co|czy|wyjaśnij|explain)\b/i.test(lower) &&
+    !/\b(swim|run|bike|workout|trening|session|add|dodaj|calendar|kalendarz)\b/i.test(lower);
+  if (questionOnly) return "QUESTION_ONLY";
+  if (intent.mode === "change") return "CHANGE";
+  if (intent.mode === "add_to_calendar") return "ADD_TO_CALENDAR";
+  if (intent.mode === "generate_and_add" || intent.mode === "generate") return "GENERATE";
+  return "GENERATE";
+}
 
 /** Parse swim volume: "3500m", "3.5km", "3500 meters", "3km swim". */
 function parseSwimVolume(lower: string): number | null {

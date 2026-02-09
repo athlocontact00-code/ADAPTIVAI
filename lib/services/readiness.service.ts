@@ -1,7 +1,11 @@
 /**
  * Readiness Score Service
  * Computes athlete readiness (0-100) based on diary signals, training load, and optional HRV.
+ * Single source of truth: use computeReadinessForUser(userId, date) for dashboard/API.
  */
+
+import { db } from "@/lib/db";
+import { addDays, startOfDay } from "@/lib/utils";
 
 export type ReadinessStatus = "OPTIMAL" | "CAUTION" | "FATIGUED";
 
@@ -16,6 +20,26 @@ export interface ReadinessResult {
   status: ReadinessStatus;
   factors: ReadinessFactor[];
   confidence: number; // 0-100
+}
+
+/** API/Dashboard result: score null when no data; no mock/random values. */
+export type ReadinessConfidence = "high" | "medium" | "low";
+
+export interface ReadinessResultForUser {
+  score: number | null;
+  confidence: ReadinessConfidence;
+  factors: {
+    sleep?: { value?: number; description: string };
+    hrv?: { value?: number; description: string };
+    fatigue?: { value?: number; description: string };
+    soreness?: { value?: number; description: string };
+    load?: { value?: number; description: string };
+    [key: string]: { value?: number; description: string } | undefined;
+  };
+  missing: string[];
+  status?: ReadinessStatus;
+  /** When score is from daily_checkin (primary). */
+  source?: "checkin" | "estimated" | null;
 }
 
 export interface DiarySignals {
@@ -253,4 +277,105 @@ export function getReadinessExplanation(
     .map((f) => `${f.description} (${f.impact > 0 ? "+" : ""}${f.impact})`)
     .join(", ");
   return `Readiness ${result.score}/100 (${result.confidence}% confidence). Key factors: ${factorDescriptions}`;
+}
+
+/**
+ * Single source of truth for dashboard/API: compute readiness for a user on a date.
+ * - Primary: DailyCheckIn for that day -> use its readinessScore (real data).
+ * - Fallback: DiaryEntry + MetricDaily -> estimated readiness (no random/mock).
+ * - No data -> score: null, missing: ['checkin']; UI shows CTA "Complete check-in".
+ */
+export async function computeReadinessForUser(
+  userId: string,
+  date: Date
+): Promise<ReadinessResultForUser> {
+  const dayStart = startOfDay(date);
+  const dayEnd = addDays(dayStart, 1);
+
+  const checkin = await db.dailyCheckIn.findFirst({
+    where: {
+      userId,
+      date: { gte: dayStart, lt: dayEnd },
+    },
+    orderBy: { date: "desc" },
+    select: {
+      readinessScore: true,
+      topFactor: true,
+      recommendation: true,
+      sleepQuality100: true,
+      fatigue100: true,
+      soreness100: true,
+    },
+  });
+
+  if (checkin?.readinessScore != null && checkin.readinessScore >= 0 && checkin.readinessScore <= 100) {
+    const factors: ReadinessResultForUser["factors"] = {};
+    if (checkin.topFactor) {
+      factors[checkin.topFactor.toLowerCase()] = { description: checkin.recommendation ?? checkin.topFactor };
+    }
+    const status: ReadinessStatus =
+      checkin.readinessScore >= 70 ? "OPTIMAL" : checkin.readinessScore >= 45 ? "CAUTION" : "FATIGUED";
+    return {
+      score: checkin.readinessScore,
+      confidence: "high",
+      factors,
+      missing: [],
+      status,
+      source: "checkin",
+    };
+  }
+
+  const diary = await db.diaryEntry.findFirst({
+    where: { userId, date: { gte: dayStart, lt: dayEnd } },
+  });
+  const metric = await db.metricDaily.findFirst({
+    where: { userId, date: { gte: dayStart, lt: dayEnd } },
+  });
+
+  const hasDiary =
+    diary &&
+    (diary.mood != null ||
+      diary.energy != null ||
+      diary.sleepHrs != null ||
+      diary.sleepQual != null ||
+      diary.stress != null ||
+      diary.soreness != null);
+  const hasLoad = metric && (metric.atl != null || metric.ctl != null || metric.tsb != null);
+
+  if (hasDiary || hasLoad) {
+    const diarySignals: DiarySignals = {
+      mood: diary?.mood ?? undefined,
+      energy: diary?.energy ?? undefined,
+      sleepHrs: diary?.sleepHrs ?? undefined,
+      sleepQual: diary?.sleepQual ?? undefined,
+      stress: diary?.stress ?? undefined,
+      soreness: diary?.soreness ?? undefined,
+    };
+    const loadSignals: LoadSignals = {
+      atl: metric?.atl ?? undefined,
+      ctl: metric?.ctl ?? undefined,
+      tsb: metric?.tsb ?? undefined,
+    };
+    const result = computeReadiness(diarySignals, loadSignals);
+    const factors: ReadinessResultForUser["factors"] = {};
+    for (const f of result.factors) {
+      factors[f.factor] = { value: f.impact, description: f.description };
+    }
+    return {
+      score: result.score,
+      confidence: result.confidence >= 70 ? "high" : result.confidence >= 40 ? "medium" : "low",
+      factors,
+      missing: [],
+      status: result.status,
+      source: "estimated",
+    };
+  }
+
+  return {
+    score: null,
+    confidence: "low",
+    factors: {},
+    missing: ["checkin"],
+    source: null,
+  };
 }

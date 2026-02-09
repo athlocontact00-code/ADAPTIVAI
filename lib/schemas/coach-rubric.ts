@@ -70,5 +70,9 @@ export const sessionIntentSchema = z.object({
   addToCalendar: z.boolean(),
   createSeparate: z.boolean(),
   durationMinHint: z.number().int().min(1).optional(),
+  /** Requested swim total meters (e.g. 3500 from "3500m tomorrow"). */
+  targetMeters: z.number().int().min(100).max(10000).optional(),
+  /** User asked to change/replace (e.g. "change it", "modify tomorrow") -> prefer replace existing. */
+  replaceIntent: z.boolean().optional(),
 });
 export type SessionIntent = z.infer<typeof sessionIntentSchema>;

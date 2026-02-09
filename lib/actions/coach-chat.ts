@@ -26,6 +26,7 @@ import { parseCalendarInsertFromResponse } from "@/lib/schemas/coach-calendar-in
 import {
   getCoachCalendarSettings,
   insertDraftWorkoutsFromCalendarJson,
+  insertWorkoutFromCoachResponse,
 } from "@/lib/actions/coach-draft";
 import { generateAndSaveWorkout } from "@/lib/services/coach-brain";
 import { getAIMemoryContextForPrompt } from "@/lib/services/ai-memory.service";
@@ -36,7 +37,7 @@ import {
   deriveExpectedSport,
 } from "@/lib/utils/coach-gates";
 import { resolveIntentDate } from "@/lib/utils/coach-intent";
-import { extractCoachIntentFull, validateWorkoutMatchesIntent } from "@/lib/coach/intent";
+import { extractCoachIntentFull, getCoachActionIntent, validateWorkoutMatchesIntent } from "@/lib/coach/intent";
 import { ensureExactTotalMeters } from "@/lib/coach/swim-utils";
 import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
 import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
@@ -785,35 +786,91 @@ export async function sendCoachMessage(input: SendCoachMessageInput): Promise<Se
   const planRigidity = parsePlanRigidity(context.userProfile.planRigidity);
   const coachSettings = await getCoachCalendarSettings();
 
-  // Unified coach brain: single-workout request → generate + adapt + save idempotently
-  const brainResult = await generateAndSaveWorkout(userId, message, {
-    addToCalendar: coachSettings?.autoAddToCalendar !== "off",
-    explainLevel: (context.userProfile.explainLevel as "minimal" | "standard" | "deep") ?? "standard",
-    source: coachSettings?.autoAddToCalendar === "draft" ? "AI_DRAFT" : "AI",
+  const coachIntent = extractCoachIntentFull(message, {
+    defaultSport: (context.userProfile.sportPrimary as "SWIM" | "BIKE" | "RUN" | "STRENGTH") ?? null,
   });
-  if (brainResult.success && brainResult.markdown) {
+  const actionIntent = getCoachActionIntent(message, coachIntent);
+
+  // ADD_TO_CALENDAR only: save last draft from conversation; never call brain (no template)
+  if (actionIntent === "ADD_TO_CALENDAR") {
+    const assistantMessages = (input.history ?? [])
+      .filter((m): m is { role: "assistant"; content: string } => m.role === "assistant")
+      .map((m) => m.content)
+      .reverse();
+    const insertResult = await insertWorkoutFromCoachResponse("", {
+      assistantMessages,
+      sportFilter: coachIntent.sport !== "UNKNOWN" ? coachIntent.sport : undefined,
+      dateFilter: coachIntent.targetDateISO ?? undefined,
+      forceMode: coachSettings?.autoAddToCalendar === "final" ? "final" : "draft",
+    });
     const usedLLM = false;
-    const confidence = 90;
-    let text = brainResult.markdown;
-    if (brainResult.warnings?.length) {
-      text += "\n\n⚠️ " + brainResult.warnings.join(" ");
-    }
-    if (brainResult.workoutId != null) {
-      text = `✅ Added to calendar${brainResult.title ? `: **${brainResult.title}**` : ""}\n\n${text}`;
+    const confidence = 85;
+    if (!insertResult.success) {
+      const text =
+        insertResult.error ??
+        "Nie znalazłem treningu do zapisania. Napisz np. „trening pływacki 3000 m na jutro”, a potem „dodaj do kalendarza”.";
+      await logCoachMessageUsage({ userId, usedLLM, confidence });
+      return {
+        ok: true,
+        text,
+        meta: {
+          usedLLM,
+          confidence,
+          tone,
+          isPro: ent.isPro,
+          limit: { daily: dailyLimit, remaining: remaining - 1 },
+        },
+      };
     }
     await logCoachMessageUsage({ userId, usedLLM, confidence });
     return {
       ok: true,
-      text,
+      text: "✅ Dodano do kalendarza.",
       meta: {
         usedLLM,
         confidence,
         tone,
         isPro: ent.isPro,
         limit: { daily: dailyLimit, remaining: remaining - 1 },
-        ...(brainResult.createdWorkoutIds?.length ? { createdWorkoutIds: brainResult.createdWorkoutIds } : {}),
+        createdWorkoutIds: insertResult.createdIds,
       },
     };
+  }
+
+  // GENERATE / CHANGE: brain generates and saves. QUESTION_ONLY skips brain and falls through to LLM.
+  if (actionIntent !== "QUESTION_ONLY") {
+    const brainResult = await generateAndSaveWorkout(userId, message, {
+      addToCalendar: coachSettings?.autoAddToCalendar !== "off",
+      explainLevel: (context.userProfile.explainLevel as "minimal" | "standard" | "deep") ?? "standard",
+      source: coachSettings?.autoAddToCalendar === "draft" ? "AI_DRAFT" : "AI",
+    });
+    if (brainResult.success && brainResult.markdown) {
+      const usedLLM = false;
+      const confidence = 90;
+      let text = brainResult.markdown;
+      if (brainResult.warnings?.length) {
+        text += "\n\n⚠️ " + brainResult.warnings.join(" ");
+      }
+      const showAddedToCalendar =
+        brainResult.workoutId != null &&
+        (coachIntent.mode === "generate_and_add" || coachIntent.mode === "add_to_calendar");
+      if (showAddedToCalendar) {
+        text = `✅ Added to calendar${brainResult.title ? `: **${brainResult.title}**` : ""}\n\n${text}`;
+      }
+      await logCoachMessageUsage({ userId, usedLLM, confidence });
+      return {
+        ok: true,
+        text,
+        meta: {
+          usedLLM,
+          confidence,
+          tone,
+          isPro: ent.isPro,
+          limit: { daily: dailyLimit, remaining: remaining - 1 },
+          ...(brainResult.createdWorkoutIds?.length ? { createdWorkoutIds: brainResult.createdWorkoutIds } : {}),
+        },
+      };
+    }
   }
 
   if (isAddWorkoutRequest(message)) {
@@ -1017,9 +1074,6 @@ ${created.descriptionMd}`;
     planRigidity,
     coachDetailLevel: coachSettings?.detailLevel,
   });
-  const coachIntent = extractCoachIntentFull(message, {
-    defaultSport: (context.userProfile.sportPrimary as "SWIM" | "BIKE" | "RUN" | "STRENGTH") ?? null,
-  });
   let userPrompt = buildCoachUserPrompt({
     input: message,
     context,
@@ -1107,6 +1161,27 @@ ${created.descriptionMd}`;
             };
           }
         }
+      }
+      // Hard guard: requested meters but payload still wrong → do not save template
+      if (
+        coachIntent.swimMeters != null &&
+        coachIntent.swimMeters > 0 &&
+        !validateWorkoutMatchesIntent(coachIntent, calendarPayload).valid
+      ) {
+        const X = coachIntent.swimMeters;
+        text = `Nie mogę stworzyć treningu na ${X} m — podaj długość basenu (25 m lub 50 m), wtedy dopasuję dystans.`;
+        await logCoachMessageUsage({ userId, usedLLM: true, confidence: 80 });
+        return {
+          ok: true,
+          text,
+          meta: {
+            usedLLM: true,
+            confidence: 80,
+            tone,
+            isPro: ent.isPro,
+            limit: { daily: dailyLimit, remaining: remaining - 1 },
+          },
+        };
       }
       const replaceForDateSport =
         coachIntent.mode === "change" &&

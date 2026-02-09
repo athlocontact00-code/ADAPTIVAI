@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractCoachIntentFull, validateWorkoutMatchesIntent } from "./intent";
+import { extractCoachIntentFull, getCoachActionIntent, validateWorkoutMatchesIntent } from "./intent";
 
 describe("extractCoachIntentFull", () => {
   it("parses 'add a swim session for tomorrow for 3500m' -> sport SWIM, date tomorrow, swimMeters 3500", () => {
@@ -29,6 +29,35 @@ describe("extractCoachIntentFull", () => {
     expect(intent.swimMeters).toBe(3500);
     expect(intent.sport).toBe("SWIM");
     expect(intent.targetDateISO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("getCoachActionIntent", () => {
+  it("returns ADD_TO_CALENDAR for 'add to calendar' (no generate phrase)", () => {
+    const intent = extractCoachIntentFull("add to calendar");
+    expect(intent.mode).toBe("add_to_calendar");
+    expect(getCoachActionIntent("add to calendar", intent)).toBe("ADD_TO_CALENDAR");
+  });
+
+  it("returns ADD_TO_CALENDAR for 'dodaj do kalendarza'", () => {
+    const intent = extractCoachIntentFull("dodaj do kalendarza");
+    expect(getCoachActionIntent("dodaj do kalendarza", intent)).toBe("ADD_TO_CALENDAR");
+  });
+
+  it("returns GENERATE for 'swim 3500m tomorrow'", () => {
+    const intent = extractCoachIntentFull("swim 3500m tomorrow");
+    expect(getCoachActionIntent("swim 3500m tomorrow", intent)).toBe("GENERATE");
+  });
+
+  it("returns CHANGE for 'change tomorrow's workout to 3000m'", () => {
+    const intent = extractCoachIntentFull("change tomorrow's workout to 3000m", { defaultSport: "SWIM" });
+    expect(intent.mode).toBe("change");
+    expect(getCoachActionIntent("change tomorrow's workout to 3000m", intent)).toBe("CHANGE");
+  });
+
+  it("returns QUESTION_ONLY for short question without workout keywords", () => {
+    const intent = extractCoachIntentFull("why did you give me that?");
+    expect(getCoachActionIntent("why did you give me that?", intent)).toBe("QUESTION_ONLY");
   });
 });
 

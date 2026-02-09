@@ -2,12 +2,13 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { 
-  computeReadiness, 
+import {
+  computeReadiness,
+  computeReadinessForUser,
   formatFactorsJson,
   DiarySignals,
   LoadSignals,
-  ReadinessResult
+  ReadinessResult,
 } from "@/lib/services/readiness.service";
 import { 
   detectFatigueType, 
@@ -218,16 +219,45 @@ export async function recomputeReadinessForDate(
 }
 
 /**
- * Get today's readiness data
+ * Get today's readiness data. Uses computeReadinessForUser (real data only; no mock).
+ * When no check-in/diary/metrics -> data is null so UI shows "Complete check-in" CTA.
  */
 export async function getTodayReadiness(): Promise<{
   success: boolean;
-  data?: ReadinessData;
+  data?: ReadinessData | null;
   error?: string;
 }> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { success: false, error: "Unauthorized" };
+  }
   const today = new Date();
   today.setHours(12, 0, 0, 0);
-  return recomputeReadinessForDate(formatLocalDateInput(today));
+  try {
+    const result = await computeReadinessForUser(session.user.id, today);
+    if (result.score == null) {
+      return { success: true, data: null };
+    }
+    const factors = Object.entries(result.factors).map(([factor, v]) => ({
+      factor,
+      impact: typeof v?.value === "number" ? v.value : 0,
+      description: v?.description ?? factor,
+    }));
+    return {
+      success: true,
+      data: {
+        score: result.score,
+        status: result.status ?? "CAUTION",
+        factors,
+        confidence: result.confidence === "high" ? 85 : result.confidence === "medium" ? 60 : 40,
+        fatigueType: "NONE",
+        fatigueRecommendation: "",
+      },
+    };
+  } catch (err) {
+    console.error("getTodayReadiness failed:", err);
+    return { success: false, error: "Failed to load readiness" };
+  }
 }
 
 /**
