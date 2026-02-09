@@ -256,11 +256,19 @@ export default function SettingsPage() {
         fetch("/api/profile")
           .then((res) => res.json())
           .then((data) => {
-            if (data.plan) setPlanInfo(data.plan);
+            if (data?.plan) setPlanInfo(data.plan);
           })
           .catch(() => {});
-      refetchPlan();
-      const t = setTimeout(refetchPlan, 1500);
+      fetch("/api/billing/status?refresh=1")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.canUsePro ?? data?.isPro) {
+            toast.success("Subscription active. You now have Pro access.");
+          }
+          refetchPlan();
+        })
+        .catch(() => refetchPlan());
+      const t = setTimeout(refetchPlan, 2000);
       window.history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
       return () => clearTimeout(t);
     }
@@ -548,8 +556,17 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: checkoutPlan }),
       });
-      const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
+      const data = (await res.json().catch(() => null)) as { url?: string; error?: string; code?: string; portalUrl?: string } | null;
       if (!res.ok) {
+        if (res.status === 409 && data?.code === "ALREADY_SUBSCRIBED") {
+          toast.info("Already subscribed. Open billing portal to manage your subscription.");
+          if (typeof data?.portalUrl === "string") {
+            window.location.href = data.portalUrl;
+            return;
+          }
+          openBillingPortal();
+          return;
+        }
         toast.error(data?.error ?? "Failed to start checkout");
         return;
       }

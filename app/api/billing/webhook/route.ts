@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
 import { syncSubscriptionFromStripe } from "@/lib/billing/stripe-sync";
+import { resolveSubscriptionFromInvoice } from "@/lib/billing/webhook-invoice";
 import { createRequestId, logInfo, logWarn, logError } from "@/lib/logger";
 
 function getWebhookSecret(): string {
@@ -75,15 +77,36 @@ export async function POST(req: Request) {
 
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object as unknown as { subscription?: string | null };
+        const session = event.data.object as Stripe.Checkout.Session;
+        const customerId =
+          typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+        const clientReferenceId = session.client_reference_id ?? null;
         if (session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription);
+          const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
+          const sub = await stripe.subscriptions.retrieve(subId);
           const userId = await syncSubscriptionFromStripe(sub);
+          if (!userId && customerId && clientReferenceId) {
+            await db.user.updateMany({
+              where: { id: clientReferenceId },
+              data: { stripeCustomerId: customerId },
+            });
+          }
           logInfo("webhook.processed", {
             requestId,
             eventId: event.id,
             eventType: event.type,
             userId: userId ?? null,
+          });
+        } else if (customerId && clientReferenceId) {
+          await db.user.updateMany({
+            where: { id: clientReferenceId },
+            data: { stripeCustomerId: customerId },
+          });
+          logInfo("webhook.processed", {
+            requestId,
+            eventId: event.id,
+            eventType: event.type,
+            note: "customer saved, no subscription",
           });
         } else {
           logInfo("webhook.processed", {
@@ -111,10 +134,11 @@ export async function POST(req: Request) {
       }
 
       case "invoice.payment_failed":
+      case "invoice.payment_succeeded":
       case "invoice.paid": {
-        const invoice = event.data.object as unknown as { subscription?: string | null };
-        if (invoice.subscription) {
-          const sub = await stripe.subscriptions.retrieve(invoice.subscription);
+        const invoice = event.data.object as Stripe.Invoice;
+        const sub = await resolveSubscriptionFromInvoice(stripe, invoice);
+        if (sub) {
           const userId = await syncSubscriptionFromStripe(sub);
           logInfo("webhook.processed", {
             requestId,
@@ -123,11 +147,13 @@ export async function POST(req: Request) {
             userId: userId ?? null,
           });
         } else {
-          logInfo("webhook.processed", {
+          const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+          logWarn("webhook.invoice_no_subscription", {
             requestId,
             eventId: event.id,
             eventType: event.type,
-            note: "no subscription",
+            invoiceId: invoice.id,
+            customerId: customerId ?? null,
           });
         }
         break;
