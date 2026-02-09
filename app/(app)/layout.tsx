@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getEntitlements } from "@/lib/billing/entitlements";
 import { setSentryUser } from "@/lib/sentry";
 import { AppShell } from "@/components/app-shell";
+import { TrialGate } from "@/components/trial-gate";
 
 export default async function AppLayout({
   children,
@@ -33,22 +34,26 @@ export default async function AppLayout({
   }
 
   return (
-    <AppShell
-      user={{
-        name: user.name,
-        email: user.email,
-        image: user.image,
-      }}
-      showFinishSetupBanner={Boolean(user.onboardingDismissedAt && !user.onboardingDone)}
-      planBadge={
-        entitlements.plan === "PRO"
-          ? "Pro"
-          : entitlements.isTrialActive && entitlements.trialDaysRemaining != null
-            ? `Trial: ${entitlements.trialDaysRemaining}d left`
-            : null
-      }
-    >
-      {children}
-    </AppShell>
+    <TrialGate plan={entitlements.plan}>
+      <AppShell
+        user={{
+          name: user.name,
+          email: user.email,
+          image: user.image,
+        }}
+        showFinishSetupBanner={Boolean(user.onboardingDismissedAt && !user.onboardingDone)}
+        planBadge={
+          entitlements.plan === "PRO"
+            ? "Pro"
+            : entitlements.isTrialActive && entitlements.trialDaysRemaining != null
+              ? `Trial: ${entitlements.trialDaysRemaining}d left`
+              : entitlements.plan === "FREE"
+                ? "Trial ended"
+                : null
+        }
+      >
+        {children}
+      </AppShell>
+    </TrialGate>
   );
 }

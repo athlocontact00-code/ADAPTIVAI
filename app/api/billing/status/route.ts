@@ -56,6 +56,14 @@ export async function GET(req: Request) {
         revalidatePath("/");
       } catch (e) {
         console.error("Billing status: checkout session sync failed", e);
+        // Fallback: resync by customer so PRO still appears if webhook/sync had issues
+        const fallback = await resyncUserBilling(session.user.id);
+        if (fallback.ok) {
+          revalidatePath("/settings");
+          revalidatePath("/simulator");
+          revalidatePath("/dashboard");
+          revalidatePath("/");
+        }
       }
     } else if (refresh) {
       const result = await resyncUserBilling(session.user.id);

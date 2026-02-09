@@ -252,7 +252,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const checkoutSuccess = searchParams.get("checkout") === "success";
     const portalReturn = searchParams.get("portal") === "return";
-    const sessionId = searchParams.get("session_id") ?? "";
+    const sessionId = (searchParams.get("session_id") ?? "").trim();
     if (checkoutSuccess || portalReturn) {
       setActiveTab("billing");
       router.refresh();
@@ -264,16 +264,28 @@ export default function SettingsPage() {
             if (data?.plan) setPlanInfo(data.plan);
           })
           .catch(() => {});
+      // Always use refresh=1 when returning from checkout/portal; session_id enables immediate sync from Stripe session
       const statusUrl =
         "/api/billing/status?refresh=1" +
-        (sessionId ? `&session_id=${encodeURIComponent(sessionId)}` : "");
-      fetch(statusUrl)
+        (sessionId.startsWith("cs_") ? `&session_id=${encodeURIComponent(sessionId)}` : "");
+      fetch(statusUrl, { cache: "no-store", credentials: "same-origin" })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data?.canUsePro ?? data?.isPro) {
             toast.success("Subscription active. You now have Pro access.");
           }
-          refetchPlan();
+          // Update plan UI immediately from status response so PRO shows without waiting for /api/profile
+          if (data && typeof data.plan === "string") {
+            setPlanInfo({
+              name: data.plan === "PRO" ? "Pro" : data.plan === "TRIAL" ? "Trial" : "Free",
+              status: typeof data.status === "string" ? data.status : data.subscriptionStatus ?? "",
+              trialDaysRemaining: data.trialDaysRemaining ?? null,
+              currentPeriodEnd: data.currentPeriodEnd ?? null,
+              cancelAtPeriodEnd: Boolean(data.cancelAtPeriodEnd),
+            });
+          } else {
+            refetchPlan();
+          }
           router.refresh();
         })
         .catch(() => {
@@ -285,7 +297,7 @@ export default function SettingsPage() {
         refetchPlan();
         router.refresh();
         setSyncingBilling(false);
-      }, 2500);
+      }, 3000);
       window.history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
       return () => clearTimeout(t);
     }
