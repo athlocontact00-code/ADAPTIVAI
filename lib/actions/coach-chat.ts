@@ -5,9 +5,9 @@ import { db } from "@/lib/db";
 import { getEntitlements } from "@/lib/billing/entitlements";
 import { buildAIContextForUser } from "@/lib/services/ai-context.builder";
 import {
-  buildCoachSystemPrompt,
   buildCoachUserPrompt,
   getCoachToneFromPreference,
+  getEffectiveCoachSystemPrompt,
 } from "@/lib/services/coach-llm-prompts";
 import {
   applyConfidenceGuardrail,
@@ -959,7 +959,7 @@ ${created.descriptionMd}`;
     }
   }
 
-  const systemPrompt = buildCoachSystemPrompt({
+  const systemPrompt = getEffectiveCoachSystemPrompt({
     tone,
     planRigidity,
     coachDetailLevel: coachSettings?.detailLevel,

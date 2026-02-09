@@ -18,6 +18,9 @@ const envSchema = z
     STRIPE_PRODUCT_ID_PRO: z.string().optional(),
 
     OPENAI_API_KEY: z.string().optional(),
+
+    /** Coach system prompt: "raw" = minimal prompt for debugging; "guided" = full behavior pack/rubric. Default "raw". */
+    COACH_MODE: z.enum(["raw", "guided"]).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === "production") {
