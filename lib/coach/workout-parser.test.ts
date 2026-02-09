@@ -155,4 +155,43 @@ describe("parsedWorkoutToPayload", () => {
     expect(payload.items[0].durationMin).toBe(60);
     expect(payload.items[0].descriptionMd).toContain("8x50m");
   });
+
+  it("sets totalDistanceMeters for SWIM from intervals in description (6x500m = 3000m)", () => {
+    const parsed: ParsedWorkout = {
+      title: "Swim 3000m",
+      sport: "SWIM",
+      totalMinutes: 75,
+      descriptionMarkdown: "Main set: 6x500m. Rest 30s.",
+      date: "2026-02-10",
+    };
+    const payload = parsedWorkoutToPayload(parsed);
+    expect(payload.items[0].totalDistanceMeters).toBe(3000);
+  });
+});
+
+describe("parseWorkoutFromText swim total meters", () => {
+  it("parses 3000m swim with intervals and payload has totalDistanceMeters 3000", () => {
+    const text = `TITLE: Swim session
+SPORT: SWIM
+TOTAL TIME: 75 min
+Main set: 6x500m. Rest 30s.`;
+    const parsed = parseWorkoutFromText(text);
+    expect(parsed).not.toBeNull();
+    expect((parsed as ParsedWorkout).sport).toBe("SWIM");
+    const payload = parsedWorkoutToPayload(parsed as ParsedWorkout);
+    expect(payload.items[0].totalDistanceMeters).toBe(3000); // 6*500 = 3000
+  });
+});
+
+describe("parseWorkoutFromText strength includes CORE", () => {
+  it("parses strength workout with CORE section", () => {
+    const text = `**TRENING: STRENGTH**
+SPORT: STRENGTH
+TOTAL TIME: 60 min
+Warm-up 10 min. Main: 3x10 push-ups. CORE: 12 min planks and dead bug. Cool-down 5 min.`;
+    const parsed = parseWorkoutFromText(text);
+    expect(parsed).not.toBeNull();
+    expect((parsed as ParsedWorkout).sport).toBe("STRENGTH");
+    expect((parsed as ParsedWorkout).descriptionMarkdown).toMatch(/CORE/i);
+  });
 });

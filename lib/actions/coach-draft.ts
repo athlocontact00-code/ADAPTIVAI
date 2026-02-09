@@ -7,7 +7,9 @@ import { db } from "@/lib/db";
 import { parseDateToLocalNoon } from "@/lib/utils";
 import { parseCalendarInsertFromResponse } from "@/lib/schemas/coach-calendar-insert";
 import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
+import type { SportIntent } from "@/lib/utils/coach-intent";
 import { parseSwimMetersFromText } from "@/lib/utils/swim-meters";
+import { extractPayloadFromAssistantMessages } from "@/lib/coach/calendar-payload-from-messages";
 import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
 
 const AI_DRAFT_SOURCE = "AI_DRAFT";
@@ -161,25 +163,64 @@ export async function insertDraftWorkoutsFromCalendarJson(
 /**
  * Parse coach response text for calendarInsert JSON and insert into DB.
  * Used when user says "send to calendar" / "add to calendar" to persist the last prescribed workout.
+ * When assistantMessages + sportFilter are provided, scans messages (newest first) for a workout matching that sport.
  * Tries: (1) JSON calendarInsert block, (2) text parser (calendar block / labeled / heuristic).
  * Revalidates /coach, /today, /calendar, /dashboard so Today and calendar refresh.
  */
 export async function insertWorkoutFromCoachResponse(
   responseText: string,
-  options?: { forceMode?: "draft" | "final" }
-): Promise<{ success: boolean; createdIds: string[]; error?: string }> {
-  const sanitized = sanitizeCoachText(responseText);
-  let payload = parseCalendarInsertFromResponse(sanitized);
-  if (!payload || payload.items.length === 0) {
-    const parsed = parseWorkoutFromText(sanitized);
-    if (parsed) payload = parsedWorkoutToPayload(parsed);
+  options?: {
+    forceMode?: "draft" | "final";
+    /** When set, scan these assistant messages (newest first) and use the first workout matching sportFilter/dateFilter. */
+    assistantMessages?: string[];
+    sportFilter?: SportIntent;
+    /** YYYY-MM-DD; when set, prefer payload whose first item has this date. */
+    dateFilter?: string;
   }
-  if (!payload || payload.items.length === 0) {
-    return {
-      success: false,
-      createdIds: [],
-      error: "I couldn't detect a workout to save. Please ask for a workout first (e.g. \"write me today's swim session\").",
-    };
+): Promise<{ success: boolean; createdIds: string[]; error?: string }> {
+  let payload: CalendarInsertPayload | null = null;
+  if (options?.assistantMessages && options.assistantMessages.length > 0) {
+    payload = extractPayloadFromAssistantMessages(
+      options.assistantMessages,
+      options.sportFilter ?? undefined,
+      options.dateFilter
+    );
+    if (!payload && options.sportFilter) {
+      const sportLabel =
+        options.sportFilter === "SWIM"
+          ? "SWIM"
+          : options.sportFilter === "BIKE"
+            ? "BIKE"
+            : options.sportFilter === "RUN"
+              ? "RUN"
+              : "STRENGTH";
+      return {
+        success: false,
+        createdIds: [],
+        error: `Nie widzę w tej rozmowie ostatniego treningu ${sportLabel} do zapisania. Poproś: "rozpisz trening ${options.sportFilter === "SWIM" ? "pływacki" : options.sportFilter === "BIKE" ? "rowerowy" : options.sportFilter === "RUN" ? "biegowy" : "siłowy"} na ${options.sportFilter === "SWIM" ? "3000m" : "60 min"}", a potem "dodaj do kalendarza".`,
+      };
+    }
+    if (!payload) {
+      return {
+        success: false,
+        createdIds: [],
+        error: "Nie widzę ostatnio rozpisanego treningu do zapisania. Napisz np.: „rozpisz trening na dziś (swim/bike/run)”, a potem „dodaj do kalendarza”.",
+      };
+    }
+  } else {
+    const sanitized = sanitizeCoachText(responseText);
+    payload = parseCalendarInsertFromResponse(sanitized);
+    if (!payload || payload.items.length === 0) {
+      const parsed = parseWorkoutFromText(sanitized);
+      if (parsed) payload = parsedWorkoutToPayload(parsed);
+    }
+    if (!payload || payload.items.length === 0) {
+      return {
+        success: false,
+        createdIds: [],
+        error: "Nie widzę ostatnio rozpisanego treningu do zapisania. Napisz np.: „rozpisz trening na dziś (swim/bike/run)”, a potem „dodaj do kalendarza”.",
+      };
+    }
   }
   const result = await insertDraftWorkoutsFromCalendarJson(payload, {
     forceMode: options?.forceMode ?? "final",

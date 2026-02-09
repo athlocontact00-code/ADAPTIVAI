@@ -33,9 +33,9 @@ import { CoachMessageRenderer } from "@/components/coach/coach-message-renderer"
 import { CoachContextToggles, type CoachContextPayload } from "@/components/coach/coach-context-toggles";
 import { HowItWorksDialog } from "@/components/coach/how-it-works-dialog";
 import { PaywallCard } from "@/components/paywall-card";
-import { sendCoachMessage, generateWorkoutAndAddToCalendar } from "@/lib/actions/coach-chat";
+import { sendCoachMessage } from "@/lib/actions/coach-chat";
 import { undoDraftWorkouts, insertWorkoutFromCoachResponse, updateCoachIncludeResultTemplate } from "@/lib/actions/coach-draft";
-import { isSendToCalendarIntent } from "@/lib/utils/coach-intent";
+import { isSendToCalendarIntent, extractCoachIntent } from "@/lib/utils/coach-intent";
 
 const EMPTY_STATE_MESSAGE =
   "No workouts yet. Generate today's workout or start a chat.";
@@ -387,75 +387,57 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
 
     try {
       if (isSendToCalendarIntent(text)) {
-        const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-        let insertResult: { success: boolean; createdIds?: string[]; error?: string } | null = null;
-        if (lastAssistant?.content) {
-          insertResult = await insertWorkoutFromCoachResponse(lastAssistant.content, {
-            forceMode: "final",
-          });
-          if (insertResult.success) {
-            setMessages((prev) => {
-              const filtered = prev.filter((m) => !m.id.startsWith("thinking-"));
-              const idLine =
-                insertResult!.createdIds?.length
-                  ? ` (Workout ID: ${insertResult!.createdIds![0]})`
-                  : "";
-              return [
-                ...filtered,
-                {
-                  id: `assistant-${Date.now()}`,
-                  role: "assistant",
-                  content: `Added to calendar ✅${idLine}`,
-                  timestamp: new Date(),
-                },
-              ];
-            });
-            toast.success("Added to calendar");
-            router.refresh();
-            return;
-          }
-        }
-        // Fallback: no workout in last message — generate one and add to calendar
-        const fallbackResult = await generateWorkoutAndAddToCalendar(historyForRequest);
-        setMessages((prev) => {
-          const filtered = prev.filter((m) => !m.id.startsWith("thinking-"));
-          if (fallbackResult.success) {
+        const intent = extractCoachIntent(text);
+        const sportFilter =
+          intent.sport !== "UNKNOWN" && intent.sport !== "MIXED"
+            ? (intent.sport as "SWIM" | "BIKE" | "RUN" | "STRENGTH")
+            : undefined;
+        const dateFilter = intent.constraints?.date;
+        const assistantMessages = [...messages]
+          .filter((m) => m.role === "assistant")
+          .map((m) => m.content)
+          .reverse();
+        const lastAssistant = assistantMessages[0];
+        const insertResult = await insertWorkoutFromCoachResponse(lastAssistant ?? "", {
+          forceMode: "final",
+          assistantMessages: assistantMessages.length > 0 ? assistantMessages : undefined,
+          sportFilter,
+          dateFilter,
+        });
+        if (insertResult.success) {
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => !m.id.startsWith("thinking-"));
             const idLine =
-              fallbackResult.createdIds?.length > 0
-                ? `\n\nAdded to calendar ✅ (Workout ID: ${fallbackResult.createdIds[0]})`
-                : "\n\nAdded to calendar ✅";
+              insertResult.createdIds?.length
+                ? ` (Workout ID: ${insertResult.createdIds[0]})`
+                : "";
             return [
               ...filtered,
               {
                 id: `assistant-${Date.now()}`,
                 role: "assistant",
-                content: (fallbackResult.generatedText ?? "Workout generated.") + idLine,
+                content: `Added to calendar ✅${idLine}`,
                 timestamp: new Date(),
               },
             ];
-          }
-          // Never show raw technical errors. Show generated text if we have it, then a friendly line.
-          const friendlyLine =
-            "I couldn't add this to the calendar automatically. You can try again in a moment or say \"add to calendar\" after this message.";
-          const displayContent = fallbackResult.generatedText
-            ? `${fallbackResult.generatedText}\n\n— ${friendlyLine}`
-            : `I had trouble adding to the calendar right now. Try asking: "Generate today's workout and add to calendar."`;
+          });
+          toast.success("Added to calendar");
+          router.refresh();
+          return;
+        }
+        setMessages((prev) => {
+          const filtered = prev.filter((m) => !m.id.startsWith("thinking-"));
           return [
             ...filtered,
             {
               id: `assistant-${Date.now()}`,
               role: "assistant",
-              content: displayContent,
+              content: insertResult.error ?? "Nie widzę ostatnio rozpisanego treningu do zapisania. Napisz np.: „rozpisz trening na dziś (swim/bike/run)”, a potem „dodaj do kalendarza”.",
               timestamp: new Date(),
             },
           ];
         });
-        if (fallbackResult.success) {
-          toast.success("Generated today's workout and added to calendar");
-          router.refresh();
-        } else {
-          toast.info("Workout generated; add to calendar didn't complete. You can try again.");
-        }
+        toast.info("Brak treningu do zapisania – doprecyzuj lub poproś o rozpisanie.");
         return;
       }
 

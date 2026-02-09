@@ -4,6 +4,7 @@
  */
 
 import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
+import { parseSwimMetersFromText } from "@/lib/utils/swim-meters";
 
 const JUNK_PATTERNS = [
   /this is because the recent signals[\s\S]*?\./gi,
@@ -140,9 +141,15 @@ export function parseWorkoutFromText(text: string): ParsedWorkout | null {
 
 /**
  * Convert a single ParsedWorkout to CalendarInsertPayload (one item).
+ * For SWIM, fills totalDistanceMeters from description if not already set (parseSwimMetersFromText).
  */
 export function parsedWorkoutToPayload(parsed: ParsedWorkout): CalendarInsertPayload {
   const date = parsed.date ?? todayISO();
+  let totalDistanceMeters = parsed.totalDistanceM ?? undefined;
+  if (parsed.sport === "SWIM" && totalDistanceMeters == null) {
+    const fromText = parseSwimMetersFromText(parsed.descriptionMarkdown);
+    if (fromText != null) totalDistanceMeters = fromText;
+  }
   return {
     calendarInsert: true,
     mode: "final",
@@ -154,7 +161,7 @@ export function parsedWorkoutToPayload(parsed: ParsedWorkout): CalendarInsertPay
         durationMin: parsed.totalMinutes ?? 60,
         descriptionMd: parsed.descriptionMarkdown,
         prescriptionJson: { steps: [] },
-        totalDistanceMeters: parsed.totalDistanceM ?? undefined,
+        totalDistanceMeters,
       },
     ],
   };

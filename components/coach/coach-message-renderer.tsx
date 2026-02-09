@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { WorkoutCard, WeekPlanGrid, ChangeProposalCard } from "./coach-structured-outputs";
 import type { WorkoutCardData, WeekPlanGridData, ChangeProposalCardData } from "./coach-structured-outputs";
 import { cn } from "@/lib/utils";
+import { sanitizeCoachText } from "@/lib/coach/workout-parser";
 
 function parseJsonBlock(content: string): unknown | null {
   const match = content.match(/```json\s*([\s\S]*?)```/);
@@ -57,7 +58,8 @@ interface CoachMessageRendererProps {
 }
 
 export function CoachMessageRenderer({ content, role, className }: CoachMessageRendererProps) {
-  const parsed = useMemo(() => parseJsonBlock(content), [content]);
+  const displayContent = role === "assistant" ? sanitizeCoachText(content) : content;
+  const parsed = useMemo(() => parseJsonBlock(displayContent), [displayContent]);
 
   if (role === "user") {
     return (
@@ -101,7 +103,7 @@ export function CoachMessageRenderer({ content, role, className }: CoachMessageR
 
   return (
     <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
-      {content.split("\n").map((line, i) => (
+      {displayContent.split("\n").map((line, i) => (
         <p key={i} className={i > 0 ? "mt-2" : ""}>
           {renderMarkdownLine(line, i)}
         </p>
