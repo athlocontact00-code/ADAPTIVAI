@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import { withSentryConfig } from "@sentry/nextjs";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const withPWA = require("@ducanh2912/next-pwa").default;
+
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const securityHeaders = [
@@ -21,11 +24,33 @@ const nextConfig: NextConfig = {
     },
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
+    ];
   },
 };
 
-const wrappedConfig = withNextIntl(nextConfig);
+const pwaOptions = {
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+  fallbacks: {
+    document: "/~offline",
+  },
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        urlPattern: /^https?:\/\/[^/]*\/api\/.*/,
+        handler: "NetworkOnly" as const,
+        options: { cacheName: "api-network-only" },
+      },
+    ],
+    navigateFallbackDenylist: [/^\/api\//, /^\/api$/],
+  },
+};
+
+const wrappedConfig = withPWA(pwaOptions)(withNextIntl(nextConfig));
 
 export default withSentryConfig(wrappedConfig, {
   org: process.env.SENTRY_ORG ?? "",
