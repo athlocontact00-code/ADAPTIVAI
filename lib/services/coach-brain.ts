@@ -362,7 +362,7 @@ function buildBlocksBySport(
   mainMin: number,
   cooldownMin: number,
   context: CoachBrainContext,
-  options?: { requestedTotalMeters?: number }
+  options?: { requestedTotalMeters?: number; strengthMobilityOnly?: boolean }
 ): {
   warmup: RubricStep[];
   main: RubricStep[];
