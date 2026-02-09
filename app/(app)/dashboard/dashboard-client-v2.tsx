@@ -128,19 +128,19 @@ type PremiumCheckinState = {
 
 interface DashboardClientProps {
   metrics: {
-    ctl: number;
-    atl: number;
-    tsb: number;
+    ctl: number | null;
+    atl: number | null;
+    tsb: number | null;
     readiness: number | null;
-    weeklyHours: number;
-    weeklyTSS: number;
-    lastWeekHours: number;
-    lastWeekTSS: number;
+    weeklyHours: number | null;
+    weeklyTSS: number | null;
+    lastWeekHours: number | null;
+    lastWeekTSS: number | null;
     weeklyHoursDelta: number | null;
     weeklyTSSDelta: number | null;
     ctlDelta: number | null;
     ctlSparkline: number[];
-    monthlyHours: number;
+    monthlyHours: number | null;
     workoutsThisWeek: number;
     chartData: Array<{ date: string; ctl: number; atl: number; tsb: number }>;
   };
@@ -700,9 +700,15 @@ export function DashboardClientV2({
           />
           <MetricCard
             title="Weekly Hours"
-            value={metrics.weeklyHours}
-            unit="h"
-            hint={metrics.lastWeekHours > 0 ? `Last week ${metrics.lastWeekHours}h` : "Build consistency week to week"}
+            value={metrics.weeklyHours ?? "—"}
+            unit={metrics.weeklyHours != null ? "h" : undefined}
+            hint={
+              metrics.weeklyHours == null
+                ? "No data yet — log completed workouts to see weekly hours."
+                : (metrics.lastWeekHours ?? 0) > 0
+                  ? `Last week ${metrics.lastWeekHours}h`
+                  : "Build consistency week to week"
+            }
             delta={metrics.weeklyHoursDelta}
             deltaLabel="vs last week"
             tooltip="Total completed training time in the last 7 days."
@@ -710,8 +716,14 @@ export function DashboardClientV2({
           />
           <MetricCard
             title="Weekly TSS"
-            value={metrics.weeklyTSS}
-            hint={metrics.lastWeekTSS > 0 ? `Last week ${metrics.lastWeekTSS} TSS` : "Baseline will appear after a few sessions"}
+            value={metrics.weeklyTSS ?? "—"}
+            hint={
+              metrics.weeklyTSS == null
+                ? "No data yet — log completed workouts with TSS to see load."
+                : (metrics.lastWeekTSS ?? 0) > 0
+                  ? `Last week ${metrics.lastWeekTSS} TSS`
+                  : "Baseline will appear after a few sessions"
+            }
             delta={metrics.weeklyTSSDelta}
             deltaLabel="vs last week"
             tooltip="Training Stress Score accumulated in the last 7 days."
@@ -719,8 +731,12 @@ export function DashboardClientV2({
           />
           <MetricCard
             title="Fitness (CTL)"
-            value={Math.round(metrics.ctl)}
-            hint={`ATL ${Math.round(metrics.atl)} • TSB ${Math.round(metrics.tsb)}`}
+            value={metrics.ctl != null ? Math.round(metrics.ctl) : "—"}
+            hint={
+              metrics.ctl != null && metrics.atl != null && metrics.tsb != null
+                ? `ATL ${Math.round(metrics.atl)} • TSB ${Math.round(metrics.tsb)}`
+                : "No data yet — complete workouts with TSS to see CTL/ATL/TSB."
+            }
             delta={metrics.ctlDelta}
             deltaLabel="14d trend"
             sparkline={metrics.ctlSparkline.length >= 2 ? metrics.ctlSparkline : null}

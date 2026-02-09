@@ -5,6 +5,7 @@ import { createRequestId, logError, logInfo } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
 import { ensureStripeCustomerForUser } from "@/lib/billing/stripe-customer";
+import { getEntitlements } from "@/lib/billing/entitlements";
 import {
   getProPriceIdForPlan,
   normalizePlan,
@@ -89,14 +90,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const existingActive = await db.subscription.findFirst({
-      where: {
-        userId: user.id,
-        status: { in: ["trialing", "active", "past_due"] },
-      },
-      select: { id: true },
-    });
-    if (existingActive) {
+    const ent = await getEntitlements(user.id);
+    if (ent.isPro) {
       const stripe = getStripeClient();
       try {
         const stripeCustomerId = user.stripeCustomerId ?? await ensureStripeCustomerForUser(user.id);

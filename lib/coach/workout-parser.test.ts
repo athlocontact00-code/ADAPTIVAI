@@ -194,4 +194,37 @@ Warm-up 10 min. Main: 3x10 push-ups. CORE: 12 min planks and dead bug. Cool-down
     expect((parsed as ParsedWorkout).sport).toBe("STRENGTH");
     expect((parsed as ParsedWorkout).descriptionMarkdown).toMatch(/CORE/i);
   });
+
+  it("strength calendar block -> add-to-calendar payload (title, sport STRENGTH, totalTime, sections)", () => {
+    const text = `---
+Title: Strength for Runners (45 min)
+Sport: STRENGTH
+Total: 45 min
+
+Warm-up:
+- 5 min light cardio
+- Joint circles
+
+Main set:
+- Split squat 3×8 each, RPE 6–7
+- Core block 10 min
+
+Cool-down:
+- Stretch
+
+Targets:
+- RPE 6–7
+---
+`;
+    const parsed = parseWorkoutFromText(text);
+    expect(parsed).not.toBeNull();
+    expect((parsed as ParsedWorkout).sport).toBe("STRENGTH");
+    expect((parsed as ParsedWorkout).totalMinutes).toBe(45);
+    expect((parsed as ParsedWorkout).title).toMatch(/Strength/);
+    const payload = parsedWorkoutToPayload(parsed as ParsedWorkout);
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0].sport).toBe("STRENGTH");
+    expect(payload.items[0].durationMin).toBe(45);
+    expect(payload.items[0].descriptionMd).toMatch(/Warm-up|Main|Core|Cool-down/i);
+  });
 });

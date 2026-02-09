@@ -15,6 +15,7 @@ export type Entitlements = {
   canUseSimulator: boolean;
   canUseReports: boolean;
   currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean;
 };
 
 function parseGraceDays(): number {
@@ -56,6 +57,7 @@ export async function getEntitlements(userId: string): Promise<Entitlements> {
       canUseSimulator: true,
       canUseReports: true,
       currentPeriodEnd: override?.expiresAt ?? null,
+      cancelAtPeriodEnd: false,
     };
   }
 
@@ -74,6 +76,7 @@ export async function getEntitlements(userId: string): Promise<Entitlements> {
       plan: true,
       status: true,
       currentPeriodEnd: true,
+      cancelAtPeriodEnd: true,
     },
   });
 
@@ -116,6 +119,7 @@ export async function getEntitlements(userId: string): Promise<Entitlements> {
     canUseSimulator,
     canUseReports,
     currentPeriodEnd: sub?.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
   };
 }
 

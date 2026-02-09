@@ -6,7 +6,6 @@ vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/db", () => ({
   db: {
     user: { findUnique: vi.fn() },
-    subscription: { findFirst: vi.fn() },
   },
 }));
 vi.mock("@/lib/stripe", () => ({
@@ -15,10 +14,14 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/billing/stripe-customer", () => ({
   ensureStripeCustomerForUser: vi.fn().mockResolvedValue("cus_existing"),
 }));
+vi.mock("@/lib/billing/entitlements", () => ({
+  getEntitlements: vi.fn(),
+}));
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
+import { getEntitlements } from "@/lib/billing/entitlements";
 import { POST } from "./route";
 
 describe("Checkout guard: active subscription", () => {
@@ -32,7 +35,10 @@ describe("Checkout guard: active subscription", () => {
       email: "u@example.com",
       stripeCustomerId: "cus_xxx",
     } as never);
-    vi.mocked(db.subscription.findFirst).mockResolvedValue({ id: "sub-db-1" } as never);
+    vi.mocked(getEntitlements).mockResolvedValue({
+      isPro: true,
+      plan: "PRO",
+    } as never);
     vi.mocked(getStripeClient).mockReturnValue({
       billingPortal: {
         sessions: {

@@ -17,7 +17,7 @@ export default async function SimulatorPage() {
     getEntitlements(session.user.id),
   ]);
 
-  if (!entitlements.canUseSimulator) {
+  if (!entitlements.isPro) {
     return (
       <div className="space-y-6 p-6">
         <h1 className="text-2xl font-bold">Simulator</h1>

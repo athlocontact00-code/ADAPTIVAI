@@ -84,12 +84,13 @@ export async function POST(req: Request) {
         if (session.subscription) {
           const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
           const sub = await stripe.subscriptions.retrieve(subId);
-          const userId = await syncSubscriptionFromStripe(sub);
+          let userId = await syncSubscriptionFromStripe(sub);
           if (!userId && customerId && clientReferenceId) {
             await db.user.updateMany({
               where: { id: clientReferenceId },
               data: { stripeCustomerId: customerId },
             });
+            userId = await syncSubscriptionFromStripe(sub);
           }
           logInfo("webhook.processed", {
             requestId,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { getEntitlements } from "@/lib/billing/entitlements";
 import { resyncUserBilling } from "@/lib/billing/resync-user";
@@ -23,12 +24,16 @@ export async function GET(req: Request) {
           { status: 502 }
         );
       }
+      revalidatePath("/settings");
+      revalidatePath("/simulator");
+      revalidatePath("/dashboard");
+      revalidatePath("/");
     }
 
     const ent = await getEntitlements(session.user.id);
     const canUsePro = ent.plan === "PRO";
 
-    return NextResponse.json({
+    const json = {
       plan: ent.plan,
       isPro: ent.isPro,
       canUsePro,
@@ -38,9 +43,18 @@ export async function GET(req: Request) {
       trialEndsAt: ent.trialEndsAt?.toISOString() ?? null,
       trialDaysRemaining: ent.trialDaysRemaining,
       currentPeriodEnd: ent.currentPeriodEnd?.toISOString() ?? null,
+      cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
       canUseAICoach: ent.canUseAICoach,
       canUseSimulator: ent.canUseSimulator,
       canUseReports: ent.canUseReports,
+      timestamp: new Date().toISOString(),
+    };
+
+    return NextResponse.json(json, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        Pragma: "no-cache",
+      },
     });
   } catch (error) {
     console.error("Billing status error:", error);

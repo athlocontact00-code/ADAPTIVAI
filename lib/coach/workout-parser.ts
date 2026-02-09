@@ -85,7 +85,7 @@ function parseLabeledFormat(text: string): ParsedWorkout | null {
   const totalLine = text.match(/(?:^|\n)\s*TOTAL TIME:\s*(.+?)(?:\n|$)/im)?.[1]?.trim();
   const minMatch = (totalLine || text).match(/(\d+)\s*(?:min|minutes?|m\b)/i);
   const totalMinutes = minMatch ? parseInt(minMatch[1], 10) : 60;
-  const hasStructure = /\b(MAIN SET|WARM-UP|COOL-DOWN|WARMUP|COOLDOWN|GOAL)\s*:?\s*\n/im.test(text);
+  const hasStructure = /\b(MAIN SET|WARM-UP|COOL-DOWN|WARMUP|COOLDOWN|CORE|GOAL)\s*:?\s*\n/im.test(text);
   const hasLabeled = (title || sportRaw) && (totalLine || minMatch || totalMinutes > 0);
   if (!hasStructure && !hasLabeled) return null;
   const sport =

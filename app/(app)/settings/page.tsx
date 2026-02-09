@@ -183,7 +183,9 @@ export default function SettingsPage() {
     trialEndsAt?: string | null;
     trialDaysRemaining?: number | null;
     currentPeriodEnd?: string | null;
+    cancelAtPeriodEnd?: boolean;
   } | null>(null);
+  const [syncingBilling, setSyncingBilling] = useState(false);
   const [benchmarkErrors, setBenchmarkErrors] = useState<Record<string, string>>({});
   const [zoneErrors, setZoneErrors] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -249,9 +251,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const checkoutSuccess = searchParams.get("checkout") === "success";
-    if (checkoutSuccess) {
+    const portalReturn = searchParams.get("portal") === "return";
+    if (checkoutSuccess || portalReturn) {
       setActiveTab("billing");
       router.refresh();
+      setSyncingBilling(true);
       const refetchPlan = () =>
         fetch("/api/profile")
           .then((res) => res.json())
@@ -266,9 +270,18 @@ export default function SettingsPage() {
             toast.success("Subscription active. You now have Pro access.");
           }
           refetchPlan();
+          router.refresh();
         })
-        .catch(() => refetchPlan());
-      const t = setTimeout(refetchPlan, 2000);
+        .catch(() => {
+          refetchPlan();
+          router.refresh();
+        })
+        .finally(() => setSyncingBilling(false));
+      const t = setTimeout(() => {
+        refetchPlan();
+        router.refresh();
+        setSyncingBilling(false);
+      }, 2500);
       window.history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
       return () => clearTimeout(t);
     }
@@ -1589,12 +1602,23 @@ export default function SettingsPage() {
                 >
                   <div className="space-y-4">
                     <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.02] p-4">
+                      {syncingBilling && (
+                        <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Syncing subscription…
+                        </p>
+                      )}
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-xs text-muted-foreground">Current plan</p>
                           <p className="font-medium">{planInfo?.name ?? "—"}</p>
                           <p className="text-[11px] text-muted-foreground capitalize">
-                            {planInfo?.name === "Pro" ? "Active" : planInfo?.name === "Trial" ? `Trial · ${planInfo?.trialDaysRemaining ?? "—"} days left` : planInfo?.status ?? "—"}
+                            {planInfo?.name === "Pro"
+                              ? planInfo?.cancelAtPeriodEnd
+                                ? "Active · Cancels at period end"
+                                : "Active"
+                              : planInfo?.name === "Trial"
+                                ? `Trial · ${planInfo?.trialDaysRemaining ?? "—"} days left`
+                                : planInfo?.status ?? "—"}
                           </p>
                         </div>
                       </div>
@@ -1604,13 +1628,36 @@ export default function SettingsPage() {
                         <li>• Progress analytics & trends</li>
                       </ul>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mb-2 w-full rounded-[10px]"
+                      disabled={syncingBilling}
+                      onClick={async () => {
+                        setSyncingBilling(true);
+                        try {
+                          const res = await fetch("/api/billing/status?refresh=1");
+                          if (res.ok) {
+                            const data = await res.json();
+                            if (data?.canUsePro ?? data?.isPro) toast.success("Status refreshed. You have Pro access.");
+                          }
+                          const profileRes = await fetch("/api/profile");
+                          const profileData = await profileRes.json();
+                          if (profileData?.plan) setPlanInfo(profileData.plan);
+                        } finally {
+                          setSyncingBilling(false);
+                        }
+                      }}
+                    >
+                      {syncingBilling ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh status"}
+                    </Button>
                     {planInfo?.name === "Pro" ? (
                       <Button
                         onClick={openBillingPortal}
                         disabled={isOpeningPortal}
                         className="w-full rounded-[12px]"
                       >
-                        {isOpeningPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manage billing"}
+                        {isOpeningPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manage subscription"}
                       </Button>
                     ) : (
                       <>

@@ -163,6 +163,7 @@ export async function GET() {
         trialEndsAt: ent.trialEndsAt?.toISOString() ?? null,
         trialDaysRemaining: ent.trialDaysRemaining,
         currentPeriodEnd: ent.currentPeriodEnd?.toISOString() ?? null,
+        cancelAtPeriodEnd: ent.cancelAtPeriodEnd,
       },
     });
   } catch (error) {

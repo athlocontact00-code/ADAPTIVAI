@@ -31,6 +31,8 @@ const RAMP_THRESHOLD = DEFAULT_RAMP_THRESHOLD;
 
 export type CoachBrainContext = {
   aiContext: AIContext;
+  /** When true, strength prescription is mobility/prehab only (e.g. user reported shoulder pain). */
+  strengthMobilityOnly?: boolean;
   recentWorkouts: Array<{
     id: string;
     date: Date;
@@ -247,6 +249,12 @@ export function generateRubricPrescription(
   const cooldownMin = Math.max(5, Math.round(effectiveDuration * 0.1));
   const mainMin = Math.max(10, effectiveDuration - warmupMin - cooldownMin);
 
+  const options =
+    sport === "SWIM" && intent.targetMeters != null
+      ? { requestedTotalMeters: intent.targetMeters }
+      : sport === "STRENGTH" && context.strengthMobilityOnly
+        ? { strengthMobilityOnly: true }
+        : undefined;
   const { warmup, main, cooldown, techniqueCues, intensityTargets, goal, title } = buildBlocksBySport(
     sport,
     intensity,
@@ -254,7 +262,7 @@ export function generateRubricPrescription(
     mainMin,
     cooldownMin,
     context,
-    sport === "SWIM" && intent.targetMeters != null ? { requestedTotalMeters: intent.targetMeters } : undefined
+    options
   );
 
   const rationale = isLowReadiness
@@ -500,26 +508,196 @@ function buildBlocksBySport(
     };
   }
 
-  // STRENGTH
-  return {
-    title: "Full Body Strength",
-    goal: "Maintain strength and injury resilience.",
-    warmup: [
-      { description: "5 min light cardio or dynamic mobility", durationMin: 5 },
-      { description: "Joint circles and activation", durationMin: warmupMin - 5 },
-    ],
-    main: [
+  // STRENGTH — templates by primary sport (swimmer / triathlete / runner) + level + duration
+  const primarySport = (context.aiContext.userProfile.sportPrimary as string) ?? "RUN";
+  const experienceLevel = (context.aiContext.userProfile.experienceLevel as string) ?? "intermediate";
+  const mobilityOnly = options?.strengthMobilityOnly === true;
+  return buildStrengthBlocks(primarySport, experienceLevel, warmupMin, mainMin, cooldownMin, mobilityOnly);
+}
+
+/** Strength templates: 6–8 exercises, sets×reps, tempo, rest, RPE, core block, prehab. 30/45/60 min variants. mobilityOnly: no heavy load (e.g. shoulder pain). */
+function buildStrengthBlocks(
+  primarySport: string,
+  experienceLevel: string,
+  warmupMin: number,
+  mainMin: number,
+  cooldownMin: number,
+  mobilityOnly = false
+): {
+  warmup: RubricStep[];
+  main: RubricStep[];
+  cooldown: RubricStep[];
+  techniqueCues: string[];
+  intensityTargets: { rpe?: string };
+  goal: string;
+  title: string;
+} {
+  const level = /beginner|novice|new/i.test(experienceLevel)
+    ? "beginner"
+    : /advanced|expert|competitive/i.test(experienceLevel)
+      ? "advanced"
+      : "intermediate";
+  const totalMin = warmupMin + mainMin + cooldownMin;
+  const durationVariant = totalMin <= 35 ? "30" : totalMin <= 52 ? "45" : "60";
+  const setsReps =
+    level === "beginner"
+      ? "2 sets × 8–12 reps"
+      : level === "advanced"
+        ? "3–4 sets × 6–10 reps"
+        : "3 sets × 8–10 reps";
+  const rpe = level === "beginner" ? "RPE 5–6" : level === "advanced" ? "RPE 7–8" : "RPE 6–7";
+  const rest = level === "beginner" ? "60–90 s" : "90–120 s";
+
+  const warmup: RubricStep[] = [
+    { description: "5 min light cardio or dynamic mobility (band/bodyweight)", durationMin: 5 },
+    { description: "Joint circles (hips, shoulders, thoracic); activation (glutes, scapula)", durationMin: Math.max(0, warmupMin - 5) },
+  ];
+
+  if (mobilityOnly) {
+    const main: RubricStep[] = [
       {
-        description: "Compound lifts: squat pattern, hinge, push, pull. 2–3 sets, 8–12 reps, RPE 6–7.",
-        durationMin: mainMin,
-        intensityTarget: { rpe: "RPE 6–7" },
+        description: "Mobility / prehab only — avoid load until cleared. Band pull-aparts 2×15; YTW 2×8 each; external rotation 2×12; thoracic rotations 2×10 each. Rest 45 s. No heavy pressing/pulling.",
+        durationMin: Math.round(mainMin * 0.4),
       },
-    ],
+      {
+        description: "Core: Dead bug 3×8; Pallof hold 2×30 s each; cat-cow 10 reps. Anti-rotation, low load.",
+        durationMin: Math.min(12, Math.round(mainMin * 0.35)),
+      },
+    ];
+    return {
+      title: `Strength — Mobility Only (${durationVariant} min)`,
+      goal: "Mobility and prehab only; no heavy resistance. Support recovery and range of motion.",
+      warmup,
+      main,
+      cooldown: [{ description: "Stretch shoulders, chest, thoracic; gentle mobility", durationMin: cooldownMin }],
+      techniqueCues: ["No load on painful areas", "Controlled range", "Stop if pain increases"],
+      intensityTargets: { rpe: "RPE 3–4 (very light)" },
+    };
+  }
+
+  // Swimmer: shoulder/scapula prehab + posterior chain + core
+  if (primarySport === "SWIM") {
+    const main: RubricStep[] = [
+      {
+        description: `Goblet squat: ${setsReps}, tempo 3-1-2-0, rest ${rest}. Cue: chest up, knees out. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.2),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Single-leg RDL (or hip hinge): ${setsReps} each leg, 3-1-2-0, rest ${rest}. Cue: soft knee, hinge at hip. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.2),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Prehab — Band pull-aparts: 2×15. YTW: 2×8 each. External rotation: 2×12. Rest 45 s. Cue: squeeze scapula, no shrug.`,
+        durationMin: Math.round(mainMin * 0.15),
+      },
+      {
+        description: `Push-up or floor press: ${setsReps}, 3-1-2-0, rest ${rest}. Cue: elbows 45°, full lockout. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.15),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Row (cable/band): ${setsReps}, 2-1-2-0, rest ${rest}. Cue: pull to ribs, squeeze. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.15),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Core block (10–12 min): Dead bug 3×8 each side; Pallof hold 3×30 s each; Plank 2×45 s. Anti-rotation focus. Rest 30 s.`,
+        durationMin: Math.min(12, Math.round(mainMin * 0.15)),
+      },
+    ];
+    return {
+      title: `Strength for Swimmers (${durationVariant} min)`,
+      goal: "Strength and injury resilience: posterior chain, shoulder/scapula prehab, core anti-rotation.",
+      warmup,
+      main,
+      cooldown: [
+        { description: "Stretch chest, lats, hips; shoulder circles", durationMin: cooldownMin },
+      ],
+      techniqueCues: ["Brace core throughout", "Controlled tempo", "Prehab before load", "Rest between sets"],
+      intensityTargets: { rpe },
+    };
+  }
+
+  // Triathlete: balanced — posterior chain, push/pull, core
+  if (primarySport === "BIKE" || /\btriathlete|triathlon\b/i.test(primarySport)) {
+    const main: RubricStep[] = [
+      {
+        description: `Goblet or front squat: ${setsReps}, 3-1-2-0, rest ${rest}. Cue: knees out, brace. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.22),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Romanian deadlift or hinge: ${setsReps}, 3-1-2-0, rest ${rest}. Cue: soft knee, drive hips. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.22),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Push (push-up or press): ${setsReps}, 3-1-2-0, rest ${rest}. Cue: full ROM. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.18),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Row (horizontal pull): ${setsReps}, 2-1-2-0, rest ${rest}. Cue: squeeze scapula. ${rpe}.`,
+        durationMin: Math.round(mainMin * 0.18),
+        intensityTarget: { rpe },
+      },
+      {
+        description: `Core block (10–12 min): Dead bug 3×8; Pallof hold 3×30 s; Bird-dog 2×8 each. Anti-rotation + anti-extension. Rest 30 s.`,
+        durationMin: Math.min(12, Math.round(mainMin * 0.2)),
+      },
+    ];
+    return {
+      title: `Strength for Triathlete (${durationVariant} min)`,
+      goal: "Posterior chain, push/pull balance, core stability for swim-bike-run.",
+      warmup,
+      main,
+      cooldown: [
+        { description: "Stretch hips, hamstrings, chest, lats", durationMin: cooldownMin },
+      ],
+      techniqueCues: ["Brace core", "Controlled tempo", "Rest 60–90 s between sets", "Full ROM"],
+      intensityTargets: { rpe },
+    };
+  }
+
+  // Runner (default): posterior chain, single-leg, core
+  const main: RubricStep[] = [
+    {
+      description: `Split squat or lunge: ${setsReps} each leg, 3-1-2-0, rest ${rest}. Cue: front knee over toe. ${rpe}.`,
+      durationMin: Math.round(mainMin * 0.22),
+      intensityTarget: { rpe },
+    },
+    {
+      description: `Single-leg RDL or hinge: ${setsReps} each, 3-1-2-0, rest ${rest}. Cue: hinge at hip. ${rpe}.`,
+      durationMin: Math.round(mainMin * 0.22),
+      intensityTarget: { rpe },
+    },
+    {
+      description: `Push-up or press: ${setsReps}, 3-1-2-0, rest ${rest}. Cue: core tight. ${rpe}.`,
+      durationMin: Math.round(mainMin * 0.18),
+      intensityTarget: { rpe },
+    },
+    {
+      description: `Row or inverted row: ${setsReps}, 2-1-2-0, rest ${rest}. Cue: pull to ribs. ${rpe}.`,
+      durationMin: Math.round(mainMin * 0.18),
+      intensityTarget: { rpe },
+    },
+    {
+      description: `Core block (10–12 min): Dead bug 3×8; Pallof 3×30 s; Plank 2×45 s. Anti-rotation/anti-extension. Rest 30 s.`,
+      durationMin: Math.min(12, Math.round(mainMin * 0.2)),
+    },
+  ];
+  return {
+    title: `Strength for Runners (${durationVariant} min)`,
+    goal: "Posterior chain and single-leg stability, core anti-rotation, injury resilience.",
+    warmup,
+    main,
     cooldown: [
-      { description: "Stretch major muscle groups", durationMin: cooldownMin },
+      { description: "Stretch calves, hamstrings, hips, glutes", durationMin: cooldownMin },
     ],
-    techniqueCues: ["Brace core", "Controlled tempo", "Full range of motion", "Rest 60–90 s between sets"],
-    intensityTargets: { rpe: "RPE 6–7" },
+    techniqueCues: ["Brace core", "Controlled tempo", "Single-leg quality over load", "Rest between sets"],
+    intensityTargets: { rpe },
   };
 }
 
@@ -1033,6 +1211,10 @@ export async function generateAndSaveWorkout(
     const intent = resolveSessionIntent(message, ctx);
     if (!intent || intent.kind !== "single" || !intent.sport) {
       return { success: false };
+    }
+
+    if (intent.sport === "STRENGTH" && /\b(shoulder pain|ból barku|bark|injury|kontuzja|pain|obol|sore)\b/i.test(message)) {
+      ctx.strengthMobilityOnly = true;
     }
 
     let prescription = generateRubricPrescription(intent, ctx);

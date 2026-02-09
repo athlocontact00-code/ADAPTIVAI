@@ -113,10 +113,10 @@ interface TimelineData {
 }
 
 interface Summary {
-  ctl: number;
-  atl: number;
-  tsb: number;
-  readiness: number;
+  ctl: number | null;
+  atl: number | null;
+  tsb: number | null;
+  readiness: number | null;
   compliance: number;
   burnoutRisk: number;
   readinessTrend: { date: string; value: number }[];
@@ -370,25 +370,31 @@ export function ProgressClient({
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard
             title="Fitness (CTL)"
-            value={Number.isFinite(summary.ctl) ? Math.round(summary.ctl) : "—"}
-            hint={summary.currentBlock ? `${summary.currentBlock.type} block` : "14-day trend"}
+            value={summary.ctl != null && Number.isFinite(summary.ctl) ? Math.round(summary.ctl) : "—"}
+            hint={
+              summary.ctl == null
+                ? "No data yet — complete workouts with TSS to see CTL."
+                : summary.currentBlock
+                  ? `${summary.currentBlock.type} block`
+                  : "14-day trend"
+            }
             tooltip="Chronic Training Load. Rolling 42-day average of daily TSS. How computed: exponential moving average (42d decay) of daily TSS from completed workouts."
             delta={summary.deltaCtl ?? undefined}
             deltaLabel={summary.deltaCtl != null ? "vs prev 14d" : undefined}
             sparkline={summary.ctlTrend && summary.ctlTrend.length >= 2 ? summary.ctlTrend : undefined}
-            tone={summary.ctl >= 50 ? "success" : summary.ctl >= 30 ? "info" : "neutral"}
+            tone={summary.ctl == null ? "neutral" : summary.ctl >= 50 ? "success" : summary.ctl >= 30 ? "info" : "neutral"}
             density="compact"
             className="border-border/50"
           />
           <MetricCard
             title="Readiness"
-            value={Number.isFinite(summary.readiness) ? summary.readiness : "—"}
-            hint="7-day trend"
+            value={summary.readiness != null && Number.isFinite(summary.readiness) ? summary.readiness : "—"}
+            hint={summary.readiness == null ? "No data yet — log check-ins to see readiness." : "7-day trend"}
             tooltip="Daily readiness score from check-ins. 0–100. How computed: weighted combination of sleep, fatigue, motivation, soreness, stress from your daily check-in."
             delta={summary.deltaReadiness ?? undefined}
             deltaLabel={summary.deltaReadiness != null ? "vs prev 14d" : undefined}
             sparkline={summary.readinessTrend.length >= 2 ? summary.readinessTrend.map((t) => t.value) : undefined}
-            tone={summary.readiness >= 70 ? "success" : summary.readiness >= 45 ? "warning" : "danger"}
+            tone={summary.readiness == null ? "neutral" : summary.readiness >= 70 ? "success" : summary.readiness >= 45 ? "warning" : "danger"}
             density="compact"
             className="border-border/50"
           />

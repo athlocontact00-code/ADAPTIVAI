@@ -14,6 +14,7 @@ import {
   getMonthStart,
 } from "@/lib/services/reports.service";
 import { buildWeeklyNarrative, buildMonthlyNarrative } from "@/lib/services/progress-narrative.service";
+import { getDashboardMetrics } from "@/lib/services/metrics";
 
 // ============================================
 // SEASON ACTIONS
@@ -767,7 +768,8 @@ export async function getProgressSummary() {
   const weekAgo = addDays(today, -7);
   const fortnightAgo = addDays(today, -14);
 
-  const [latestMetric, weekMetrics, fortnightMetrics, activeSeason, upcomingRaces] = await Promise.all([
+  const [dashboardMetrics, latestMetric, weekMetrics, fortnightMetrics, activeSeason, upcomingRaces] = await Promise.all([
+    getDashboardMetrics(userId),
     db.metricDaily.findFirst({
       where: { userId },
       orderBy: { date: "desc" },
@@ -805,10 +807,8 @@ export async function getProgressSummary() {
     .filter((m: any) => m.complianceScore != null)
     .map((m: any) => ({ date: formatLocalDateInput(new Date(m.date)), value: m.complianceScore! }));
 
-  // CTL sparkline (last 14 days)
-  const ctlTrend = fortnightMetrics
-    .filter((m: any) => m.ctl != null && Number.isFinite(m.ctl))
-    .map((m: any) => m.ctl as number);
+  // CTL sparkline from shared metrics service (real data from workouts)
+  const ctlTrend = dashboardMetrics.ctlSparkline?.length >= 2 ? dashboardMetrics.ctlSparkline : undefined;
 
   // Delta: current 14d avg vs prev 14d avg
   const curr14 = fortnightMetrics;
@@ -863,10 +863,10 @@ export async function getProgressSummary() {
   const activeSeasonName = activeSeason ? (activeSeason as any).name : null;
 
   return {
-    ctl: latestMetric?.ctl ?? 0,
-    atl: latestMetric?.atl ?? 0,
-    tsb: latestMetric?.tsb ?? 0,
-    readiness: (latestMetric as any)?.readinessScore ?? 0,
+    ctl: dashboardMetrics.ctl ?? null,
+    atl: dashboardMetrics.atl ?? null,
+    tsb: dashboardMetrics.tsb ?? null,
+    readiness: dashboardMetrics.readiness ?? null,
     compliance: (latestMetric as any)?.complianceScore ?? 0,
     burnoutRisk: (latestMetric as any)?.burnoutRisk ?? 0,
     readinessTrend,

@@ -29,6 +29,7 @@ function minimalContext(todayStr: string): CoachBrainContext {
         swimPoolLengthM: 25,
         experienceLevel: "intermediate",
         identityMode: "competitive",
+        sportPrimary: "RUN",
       },
       zones: {
         hr: { z2: { min: 120, max: 140 }, z3: { min: 141, max: 160 } },
@@ -106,6 +107,67 @@ describe("generateRubricPrescription", () => {
     const prescription = generateRubricPrescription(intent, ctx);
     expect(prescription.title).not.toBe("Technique & Endurance Swim");
     expect(prescription.title).toBe("Swim 3500m");
+  });
+
+  it("STRENGTH prescription has title, sport STRENGTH, durationMin, main includes core block (add-to-calendar ready)", () => {
+    const ctx = minimalContext("2026-02-09");
+    const intent = {
+      kind: "single" as const,
+      sport: "STRENGTH" as const,
+      date: "2026-02-10",
+      addToCalendar: true,
+      createSeparate: false,
+      replaceIntent: false,
+    };
+    const prescription = generateRubricPrescription(intent, ctx);
+    expect(prescription.sport).toBe("STRENGTH");
+    expect(prescription.title).toMatch(/Strength/);
+    expect(prescription.durationMin).toBeGreaterThanOrEqual(20);
+    const mainText = prescription.main.map((m) => m.description).join(" ");
+    expect(mainText).toMatch(/[Cc]ore/);
+    const item = rubricToCalendarItem(prescription);
+    expect(item.descriptionMd).toMatch(/STRENGTH|Strength/);
+    expect(item.prescriptionJson).toBeDefined();
+  });
+
+  it("STRENGTH with 45 min intent produces ~45 min total and add-to-calendar payload", () => {
+    const ctx = minimalContext("2026-02-09");
+    const intent = {
+      kind: "single" as const,
+      sport: "STRENGTH" as const,
+      date: "2026-02-10",
+      addToCalendar: true,
+      createSeparate: false,
+      replaceIntent: false,
+      durationMinHint: 45,
+    };
+    const prescription = generateRubricPrescription(intent, ctx);
+    expect(prescription.sport).toBe("STRENGTH");
+    expect(prescription.durationMin).toBe(45);
+    const item = rubricToCalendarItem(prescription);
+    expect(item).toBeDefined();
+    expect(prescription.warmup.length + prescription.main.length + prescription.cooldown.length).toBeGreaterThan(0);
+  });
+
+  it("STRENGTH with strengthMobilityOnly (e.g. shoulder pain) returns mobility-only, no heavy compound", () => {
+    const ctx: CoachBrainContext = {
+      ...minimalContext("2026-02-09"),
+      strengthMobilityOnly: true,
+    };
+    const intent = {
+      kind: "single" as const,
+      sport: "STRENGTH" as const,
+      date: "2026-02-10",
+      addToCalendar: true,
+      createSeparate: false,
+      replaceIntent: false,
+    };
+    const prescription = generateRubricPrescription(intent, ctx);
+    expect(prescription.sport).toBe("STRENGTH");
+    expect(prescription.title).toMatch(/Mobility/);
+    const mainText = prescription.main.map((m) => m.description).join(" ");
+    expect(mainText).toMatch(/[Mm]obility|[Pp]rehab|avoid load|No heavy/);
+    expect(prescription.intensityTargets.rpe).toMatch(/3–4|light/);
   });
 });
 

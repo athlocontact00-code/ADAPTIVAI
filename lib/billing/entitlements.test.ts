@@ -75,16 +75,16 @@ describe("isProSubscriptionStatus", () => {
     expect(isProSubscriptionStatus("trialing")).toBe(true);
   });
 
+  it("returns true for past_due (grace period)", () => {
+    expect(isProSubscriptionStatus("past_due")).toBe(true);
+  });
+
   it("returns false for canceled", () => {
     expect(isProSubscriptionStatus("canceled")).toBe(false);
   });
 
   it("returns false for incomplete", () => {
     expect(isProSubscriptionStatus("incomplete")).toBe(false);
-  });
-
-  it("returns false for past_due", () => {
-    expect(isProSubscriptionStatus("past_due")).toBe(false);
   });
 
   it("returns false for null", () => {
