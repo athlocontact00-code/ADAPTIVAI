@@ -252,6 +252,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const checkoutSuccess = searchParams.get("checkout") === "success";
     const portalReturn = searchParams.get("portal") === "return";
+    const sessionId = searchParams.get("session_id") ?? "";
     if (checkoutSuccess || portalReturn) {
       setActiveTab("billing");
       router.refresh();
@@ -263,7 +264,10 @@ export default function SettingsPage() {
             if (data?.plan) setPlanInfo(data.plan);
           })
           .catch(() => {});
-      fetch("/api/billing/status?refresh=1")
+      const statusUrl =
+        "/api/billing/status?refresh=1" +
+        (sessionId ? `&session_id=${encodeURIComponent(sessionId)}` : "");
+      fetch(statusUrl)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data?.canUsePro ?? data?.isPro) {

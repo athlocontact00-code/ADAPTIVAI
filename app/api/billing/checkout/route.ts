@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     }
 
     const ent = await getEntitlements(user.id);
-    if (ent.isPro) {
+    if (ent.plan === "PRO") {
       const stripe = getStripeClient();
       try {
         const stripeCustomerId = user.stripeCustomerId ?? await ensureStripeCustomerForUser(user.id);
@@ -193,7 +193,7 @@ export async function POST(req: Request) {
         customer: stripeCustomerId,
         client_reference_id: user.id,
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${appUrl}/settings?checkout=success`,
+        success_url: `${appUrl}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/settings?checkout=cancel`,
         allow_promotion_codes: true,
         subscription_data: {
