@@ -9,6 +9,7 @@ import { parseCalendarInsertFromResponse } from "@/lib/schemas/coach-calendar-in
 import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
 import type { SportIntent } from "@/lib/utils/coach-intent";
 import { parseSwimMetersFromText } from "@/lib/utils/swim-meters";
+import { ensureExactTotalMeters } from "@/lib/coach/swim-utils";
 import { extractPayloadFromAssistantMessages } from "@/lib/coach/calendar-payload-from-messages";
 import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
 
@@ -114,7 +115,7 @@ function mapSportToType(sport: string): string {
  */
 export async function insertDraftWorkoutsFromCalendarJson(
   payload: CalendarInsertPayload,
-  options?: { forceMode?: "draft" | "final" }
+  options?: { forceMode?: "draft" | "final"; replaceForDateSport?: boolean }
 ): Promise<{ success: boolean; createdIds: string[]; error?: string }> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, createdIds: [], error: "Unauthorized" };
@@ -122,6 +123,7 @@ export async function insertDraftWorkoutsFromCalendarJson(
   const userId = session.user.id;
   const createdIds: string[] = [];
   const asDraft = options?.forceMode ? options.forceMode === "draft" : payload.mode === "draft";
+  const replaceExisting = options?.replaceForDateSport === true;
 
   for (const item of payload.items) {
     const date = parseDateToLocalNoon(item.date);
@@ -131,10 +133,40 @@ export async function insertDraftWorkoutsFromCalendarJson(
         ? JSON.stringify(item.prescriptionJson)
         : "{}";
 
+    let descriptionMd = item.descriptionMd ?? "";
     let distanceM: number | undefined = item.totalDistanceMeters ?? undefined;
-    if (type === "SWIM" && distanceM == null && item.descriptionMd) {
-      const parsed = parseSwimMetersFromText(item.descriptionMd);
-      if (parsed != null) distanceM = parsed;
+
+    if (type === "SWIM" && descriptionMd) {
+      const computed = parseSwimMetersFromText(descriptionMd);
+      const targetM = distanceM ?? computed ?? undefined;
+      if (targetM != null && computed != null && computed !== targetM) {
+        descriptionMd = ensureExactTotalMeters(descriptionMd, targetM);
+        const after = parseSwimMetersFromText(descriptionMd);
+        if (after != null) distanceM = after;
+      }
+      if (distanceM == null && computed != null) distanceM = computed;
+    }
+
+    if (replaceExisting) {
+      const existing = await db.workout.findFirst({
+        where: { userId, date, type },
+        select: { id: true },
+      });
+      if (existing) {
+        await db.workout.update({
+          where: { id: existing.id },
+          data: {
+            title: item.title,
+            durationMin: item.durationMin ?? 60,
+            distanceM: distanceM ?? null,
+            descriptionMd,
+            prescriptionJson,
+            source: asDraft ? AI_DRAFT_SOURCE : AI_FINAL_SOURCE,
+          },
+        });
+        createdIds.push(existing.id);
+        continue;
+      }
     }
 
     const created = await db.workout.create({
@@ -149,7 +181,7 @@ export async function insertDraftWorkoutsFromCalendarJson(
         completed: false,
         aiGenerated: true,
         source: asDraft ? AI_DRAFT_SOURCE : AI_FINAL_SOURCE,
-        descriptionMd: item.descriptionMd ?? "",
+        descriptionMd,
         prescriptionJson,
       },
       select: { id: true },
@@ -186,25 +218,17 @@ export async function insertWorkoutFromCoachResponse(
       options.dateFilter
     );
     if (!payload && options.sportFilter) {
-      const sportLabel =
-        options.sportFilter === "SWIM"
-          ? "SWIM"
-          : options.sportFilter === "BIKE"
-            ? "BIKE"
-            : options.sportFilter === "RUN"
-              ? "RUN"
-              : "STRENGTH";
       return {
         success: false,
         createdIds: [],
-        error: `Nie widzę w tej rozmowie ostatniego treningu ${sportLabel} do zapisania. Poproś: "rozpisz trening ${options.sportFilter === "SWIM" ? "pływacki" : options.sportFilter === "BIKE" ? "rowerowy" : options.sportFilter === "RUN" ? "biegowy" : "siłowy"} na ${options.sportFilter === "SWIM" ? "3000m" : "60 min"}", a potem "dodaj do kalendarza".`,
+        error: `I couldn't detect a workout to save — say 'write me a swim session for 3000m' and I'll save it.`,
       };
     }
     if (!payload) {
       return {
         success: false,
         createdIds: [],
-        error: "Nie widzę ostatnio rozpisanego treningu do zapisania. Napisz np.: „rozpisz trening na dziś (swim/bike/run)”, a potem „dodaj do kalendarza”.",
+        error: "I couldn't detect a workout to save — say 'write me a swim session for 3000m' and I'll save it.",
       };
     }
   } else {
@@ -218,7 +242,7 @@ export async function insertWorkoutFromCoachResponse(
       return {
         success: false,
         createdIds: [],
-        error: "Nie widzę ostatnio rozpisanego treningu do zapisania. Napisz np.: „rozpisz trening na dziś (swim/bike/run)”, a potem „dodaj do kalendarza”.",
+        error: "I couldn't detect a workout to save — say 'write me a swim session for 3000m' and I'll save it.",
       };
     }
   }

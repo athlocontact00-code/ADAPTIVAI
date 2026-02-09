@@ -11,7 +11,6 @@ import {
 } from "@/lib/services/coach-llm-prompts";
 import {
   applyConfidenceGuardrail,
-  ensureBecauseReasoning,
   type ToneMode,
   type PlanRigidity,
 } from "@/lib/services/ai-coach-behavior.service";
@@ -30,13 +29,17 @@ import {
 } from "@/lib/actions/coach-draft";
 import { generateAndSaveWorkout } from "@/lib/services/coach-brain";
 import { getAIMemoryContextForPrompt } from "@/lib/services/ai-memory.service";
-import { logError } from "@/lib/logger";
+import { logError, logWarn } from "@/lib/logger";
 import {
   validateSportCorrectness,
   validateSwimMetersCompleteness,
   deriveExpectedSport,
 } from "@/lib/utils/coach-gates";
+import { resolveIntentDate } from "@/lib/utils/coach-intent";
+import { extractCoachIntentFull, validateWorkoutMatchesIntent } from "@/lib/coach/intent";
+import { ensureExactTotalMeters } from "@/lib/coach/swim-utils";
 import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
+import type { CalendarInsertPayload } from "@/lib/schemas/coach-calendar-insert";
 
 export type CoachContextOverrides = {
   useCheckInData?: boolean;
@@ -490,13 +493,17 @@ function deterministicFallback(params: {
     /^\s*(hi|hello|hey|yo|cześć|czesc|hej|siema|elo)\b/.test(lower) ||
     /^\s*(how are you|jak tam|co tam)\b/.test(lower);
   if (isGreeting) {
+    const todaySummary = (params.context.planSummary as { todaySummary?: string })?.todaySummary;
+    const summary =
+      todaySummary && todaySummary.trim().length > 0 ? `\n\nToday: ${todaySummary.slice(0, 200)}.` : "";
     const msg =
-      params.tone === "DIRECT"
+      (params.tone === "DIRECT"
         ? "Hi. Tell me what you're working on today (goal, available time, and how you feel)."
         : params.tone === "COACH"
           ? "Hey. Quick check: how did you sleep, and how do your legs feel right now (fresh / heavy / sore)? Then tell me your goal for today."
-          : "Hey! How are you feeling today? Tell me how you slept and how your legs feel (fresh / heavy / sore), and what you want to accomplish.";
-
+          : "Hey! How are you feeling today? Tell me how you slept and how your legs feel (fresh / heavy / sore), and what you want to accomplish.") +
+      summary +
+      "\n\nWhat would you like — a workout for today, a plan change, or just chat?";
     return { text: msg, confidence: 85 };
   }
 
@@ -529,14 +536,22 @@ function deterministicFallback(params: {
   })();
 
   let msg = `${base.decision}.`;
-  msg = ensureBecauseReasoning(msg, base.because);
   msg = applyConfidenceGuardrail(msg, base.confidence);
 
   if (base.confidence < 70) {
     msg = `${msg} I'm not entirely sure — my confidence is around ${base.confidence}%.`;
   }
 
-  msg = `${msg}\n\nNext step: tell me how you slept and how your legs feel right now (fresh / heavy / sore).`;
+  const wantsWorkout =
+    isAddWorkoutRequest(params.input) ||
+    /\b(workout|trening|session|run|swim|bike|today'?s?)\b/i.test(params.input);
+  if (wantsWorkout) {
+    const primary = (params.context.userProfile.sportPrimary ?? "").toUpperCase();
+    const sport = primary === "SWIM" ? "swim" : primary === "BIKE" ? "bike" : "run";
+    msg = `${msg}\n\n**Minimal safe option** (I couldn't reach the full coach right now — try again in a moment for a personalized plan): 45 min easy ${sport} — 10 min warm-up, 25 min steady, 10 min cool-down.`;
+  } else {
+    msg = `${msg}\n\nNext step: tell me how you slept and how your legs feel right now (fresh / heavy / sore).`;
+  }
 
   return { text: msg, confidence: base.confidence };
 }
@@ -689,6 +704,44 @@ function isOpenAIQuotaError(error: unknown): boolean {
     msg.includes("You exceeded your current quota") ||
     msg.includes("OpenAI error: 429")
   );
+}
+
+/** True for errors that may succeed on retry: 429, 5xx, network/timeout. */
+function isTransientLLMError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (/OpenAI error:\s*429\b/.test(msg)) return true;
+  if (/OpenAI error:\s*5\d{2}\b/.test(msg)) return true;
+  if (/timeout|ETIMEDOUT|ECONNRESET|fetch failed|network/i.test(msg)) return true;
+  if (error instanceof TypeError && msg.includes("fetch")) return true;
+  return false;
+}
+
+const RETRY_DELAYS_MS = [300, 1200];
+
+/** Call OpenAI with retries (2 retries, 300ms and 1200ms) for transient errors. */
+async function callOpenAIChatWithRetry(params: {
+  system: string;
+  user: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+  userId?: string;
+}): Promise<string> {
+  const { userId, ...callParams } = params;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await callOpenAIChat(callParams);
+    } catch (err) {
+      lastError = err;
+      if (attempt < RETRY_DELAYS_MS.length && isTransientLLMError(err)) {
+        const delay = RETRY_DELAYS_MS[attempt];
+        logWarn("coach.llm.retry", { userId, attempt: attempt + 1, delayMs: delay });
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 export async function sendCoachMessage(input: SendCoachMessageInput): Promise<SendCoachMessageResult> {
@@ -964,7 +1017,14 @@ ${created.descriptionMd}`;
     planRigidity,
     coachDetailLevel: coachSettings?.detailLevel,
   });
-  let userPrompt = buildCoachUserPrompt({ input: message, context });
+  const coachIntent = extractCoachIntentFull(message, {
+    defaultSport: (context.userProfile.sportPrimary as "SWIM" | "BIKE" | "RUN" | "STRENGTH") ?? null,
+  });
+  let userPrompt = buildCoachUserPrompt({
+    input: message,
+    context,
+    intentOverride: coachIntent,
+  });
   const overrides = input.contextOverrides;
   if (overrides) {
     const pre = `Context preferences: useCheckIn=${overrides.useCheckInData !== false}, useDiary=${overrides.useDiaryNotes === true}, useSeasonGoals=${overrides.useSeasonGoals !== false}, timeBudgetHours=${overrides.timeBudgetHours ?? "profile"}\n\n`;
@@ -981,10 +1041,11 @@ ${created.descriptionMd}`;
   let createdWorkoutIds: string[] | undefined;
 
   try {
-    const llmText = await callOpenAIChat({
+    const llmText = await callOpenAIChatWithRetry({
       system: systemPrompt,
       user: userPrompt,
       history: input.history,
+      userId,
     });
     usedLLM = true;
 
@@ -1017,11 +1078,46 @@ ${created.descriptionMd}`;
       text = `${text}\n\nI'm not entirely sure — my confidence is around ${confidence}%.`;
     }
 
-    // Auto-add to calendar as draft/final when AI returns calendarInsert JSON
-    const calendarPayload = parseCalendarInsertFromResponse(text);
+    // Auto-add to calendar: validate intent match, retry or auto-adjust if needed
+    let calendarPayload: CalendarInsertPayload | null = parseCalendarInsertFromResponse(text);
     if (calendarPayload && calendarPayload.items.length > 0 && coachSettings?.autoAddToCalendar && coachSettings.autoAddToCalendar !== "off") {
+      let validation = validateWorkoutMatchesIntent(coachIntent, calendarPayload);
+      if (!validation.valid && validation.offByMeters != null && validation.offByMeters <= 300 && coachIntent.swimMeters != null) {
+        const item = calendarPayload.items[0];
+        const fixedMd = ensureExactTotalMeters(item.descriptionMd ?? "", coachIntent.swimMeters);
+        calendarPayload = {
+          ...calendarPayload,
+          items: [{ ...item, descriptionMd: fixedMd, totalDistanceMeters: coachIntent.swimMeters }],
+        };
+        validation = validateWorkoutMatchesIntent(coachIntent, calendarPayload);
+      }
+      if (!validation.valid && (validation.offByMeters == null || validation.offByMeters > 300)) {
+        const strictUser = `${userPrompt}\n\n[Correction: Output ONLY a JSON code block. REQUIRED: date=${coachIntent.targetDateISO ?? "today"}, sport=${coachIntent.sport}, totalMeters=${coachIntent.swimMeters ?? "match requested"}. No other text.]`;
+        const retryText = await callOpenAIChat({ system: systemPrompt, user: strictUser, history: input.history });
+        const retryPayload = parseCalendarInsertFromResponse(stripMedicalDiagnosisLanguage(retryText));
+        if (retryPayload && retryPayload.items.length > 0) {
+          calendarPayload = retryPayload;
+          validation = validateWorkoutMatchesIntent(coachIntent, calendarPayload);
+          if (!validation.valid && validation.offByMeters != null && validation.offByMeters <= 300 && coachIntent.swimMeters != null) {
+            const item = calendarPayload.items[0];
+            const fixedMd = ensureExactTotalMeters(item.descriptionMd ?? "", coachIntent.swimMeters);
+            calendarPayload = {
+              ...calendarPayload,
+              items: [{ ...item, descriptionMd: fixedMd, totalDistanceMeters: coachIntent.swimMeters }],
+            };
+          }
+        }
+      }
+      const replaceForDateSport =
+        coachIntent.mode === "change" &&
+        calendarPayload.items.every((item) => {
+          const today = resolveIntentDate("today");
+          const tomorrow = resolveIntentDate("tomorrow");
+          return item.date === today || item.date === tomorrow;
+        });
       const insertResult = await insertDraftWorkoutsFromCalendarJson(calendarPayload, {
         forceMode: coachSettings.autoAddToCalendar,
+        replaceForDateSport,
       });
       if (insertResult.success && insertResult.createdIds.length > 0) {
         createdWorkoutIds = insertResult.createdIds;
@@ -1029,6 +1125,12 @@ ${created.descriptionMd}`;
     }
   } catch (error) {
     logError("coach.openai.failed", { userId }, error instanceof Error ? error : undefined);
+    try {
+      const Sentry = await import("@sentry/nextjs");
+      Sentry.captureException(error, { extra: { userId } });
+    } catch {
+      // Sentry not available or import failed
+    }
 
     if (isOpenAIQuotaError(error)) {
       const usedLLM = false;
@@ -1143,7 +1245,7 @@ export async function generateWorkoutAndAddToCalendar(
     return {
       success: false,
       createdIds: [],
-      error: "I couldn't detect a workout to save. Please ask for a workout first (e.g. \"write me today's swim session\").",
+      error: "I couldn't detect a workout to save — say 'write me a swim session for 3000m' and I'll save it.",
       generatedText,
     };
   }

@@ -1,4 +1,6 @@
 import type { AIContext } from "@/lib/services/ai-context.builder";
+import { extractCoachIntentFull, type CoachIntentResult } from "@/lib/coach/intent";
+import { parseSwimPR, computePaces } from "@/lib/coach/swim-utils";
 
 export type CoachTone = "SUPPORTIVE" | "DIRECT" | "COACH";
 
@@ -41,7 +43,10 @@ DEFAULTS WHEN MISSING
 Discipline default: If the athlete's primary sport is Swim (or context says swimmer / primarySport Swim) and they ask for "training" or "today's workout" without specifying a sport, prescribe SWIM. Prescribe Run or Bike only if they ask explicitly or as an optional "Option B" alternative.
 
 SWIM QUALITY (CRITICAL)
-Never output "1400 m steady" or "X meters steady" without structure. Main set must be interval-based or clearly segmented (e.g. 3×400, 8×100, 6×200, ladders). Always include: reps × distance, rest in seconds, effort target (RPE or pace), one technique focus cue. Always include TOTAL METERS CHECK: warm-up + main + cool-down = total.
+- Never output "1400 m steady" or "X meters steady" without structure. Main set must be interval-based or clearly segmented (e.g. 3×400, 8×100, 6×200, ladders). Always include: reps × distance, rest in seconds, effort target (RPE or pace), one technique focus cue.
+- TOTAL METERS: The sum of all set distances MUST equal exactly the requested/claimed total. If the user asks for 3000 m, output sets that add up to exactly 3000 m. Do NOT write "drop 2×100" or "minus 200m" or any visible math correction — design the sets so they sum correctly from the start. Internally verify: warm-up + main + cool-down = total (e.g. TOTAL METERS: 3000).
+- If the context includes requestedSwimMeters (e.g. 3000), your workout total must be exactly that number. Do not default to a different distance (e.g. 1800 m) when the user requested 3000 m.
+- If the context includes swimPaceTargets (from a swim PR), use those per-100m targets for interval efforts (aerobic, threshold, VO2) where appropriate.
 
 RUN / BIKE QUALITY
 Include cadence or form cues (max 2 bullets). Specify intensity as pace/HR/power OR RPE with clear description. If user asks for an "easy" day, keep it truly easy and say so in one sentence.
@@ -183,13 +188,47 @@ export function getEffectiveCoachSystemPrompt(params: Parameters<typeof buildCoa
   return buildCoachSystemPrompt(params);
 }
 
-export function buildCoachUserPrompt(params: { input: string; context: AIContext }): string {
+export function buildCoachUserPrompt(params: {
+  input: string;
+  context: AIContext;
+  /** When provided, used for prompt injection; otherwise extracted from input. */
+  intentOverride?: CoachIntentResult;
+}): string {
   const compact = compactContext(params.context);
+  const intent =
+    params.intentOverride ??
+    extractCoachIntentFull(params.input, {
+      defaultSport: (params.context.userProfile.sportPrimary as "SWIM" | "BIKE" | "RUN" | "STRENGTH") ?? null,
+    });
+  const swimPR = parseSwimPR(params.input);
+  const extras: string[] = [];
+
+  // REQUIRED: user intent — never override with template defaults (e.g. 1800m when user asked 3500m)
+  if (intent.sport !== "UNKNOWN") {
+    extras.push(`REQUIRED sport: ${intent.sport}. Do NOT output a different sport (e.g. Run when user asked Swim).`);
+  }
+  if (intent.targetDateISO) {
+    extras.push(`REQUIRED date for calendar: ${intent.targetDateISO}.`);
+  }
+  if (intent.swimMeters != null && intent.swimMeters > 0) {
+    extras.push(`REQUIRED total swim meters: ${intent.swimMeters}. Output sets that sum to exactly ${intent.swimMeters} m. Never use a default (e.g. 1800 m) when user requested ${intent.swimMeters} m.`);
+  }
+  if (intent.durationMin != null && intent.durationMin > 0 && intent.sport !== "SWIM") {
+    extras.push(`Requested duration: ${intent.durationMin} min.`);
+  }
+  if (swimPR) {
+    const paces = computePaces(swimPR);
+    extras.push(
+      `Swim pace targets from athlete PR (${swimPR.distanceM}m): aerobic ~${paces.aerobicPer100Sec}s/100m, threshold ~${paces.thresholdPer100Sec}s/100m, VO2 ~${paces.vo2Per100Sec}s/100m. Use for interval targets where appropriate.`
+    );
+  }
+  const extraBlock =
+    extras.length > 0 ? `\nCoach instructions (override defaults when relevant):\n${extras.join("\n")}\n` : "";
   return `Athlete message:
 ${params.input}
 
 Context (JSON):
 ${JSON.stringify(compact)}
-
+${extraBlock}
 Respond as the coach.`;
 }
