@@ -229,6 +229,14 @@ Install instructions (public, no auth): **[/install](/install)**.
    - iOS: Safari → Share → Add to Home Screen.  
    - Android: Chrome → menu → Install app.
 
+### Odświeżenie ikony PWA po deployu
+
+Po wdrożeniu nowej wersji ikon (np. po `npm run pwa:icons` i deployu) ikona na urządzeniu może się nie zaktualizować z powodu cache. Żeby zobaczyć nową ikonę:
+
+1. **Odinstaluj PWA** (Chrome: ikona aplikacji → prawy przycisk → Usuń; Android: długie przytrzymanie ikony → Odinstaluj; iOS: długie przytrzymanie → Usuń aplikację).
+2. **Wyczyść dane witryny** (opcjonalnie): Chrome → DevTools → Application → Storage → Clear site data (lub w ustawieniach przeglądarki — dane witryny dla Twojej domeny).
+3. **Zainstaluj ponownie** (Install app / Add to Home Screen).
+
 ## Available Scripts
 
 | Script | Description |
@@ -248,6 +256,7 @@ Install instructions (public, no auth): **[/install](/install)**.
 | `npm run db:seed` | Seed demo data |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:reset` | Reset database (delete all data) |
+| `npm run pwa:icons` | Regenerate PWA icons + favicons from `assets/logo.png` or `assets/logo-1024.png` (or create `assets/logo-1024.png` from built-in sygnet). |
 
 ## Project Structure
 
