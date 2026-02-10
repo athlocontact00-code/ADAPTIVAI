@@ -41,6 +41,7 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
-      - name: Run CI gates (lint, typecheck, build)
+      - name: Run CI gates (lint, typecheck, test, build)
         run: npm run ci
+      # lint uses --max-warnings 999999 so warnings do not fail the job; fix warnings over time
       
