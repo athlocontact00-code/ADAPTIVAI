@@ -17,7 +17,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://www.adaptivai.online";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(appUrl),
   title: "AdaptivAI - Intelligent Training Platform",
   description: "Your AI-powered training companion for optimized performance",
   manifest: "/manifest.webmanifest",
@@ -33,6 +36,26 @@ export const metadata: Metadata = {
       { url: "/favicon.png", sizes: "32x32", type: "image/png" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  openGraph: {
+    type: "website",
+    title: "AdaptivAI - Intelligent Training Platform",
+    description: "Your AI-powered training companion for optimized performance",
+    siteName: "AdaptivAI",
+    images: [
+      { url: "/icons/icon-512.png", width: 512, height: 512, alt: "AdaptivAI" },
+      { url: "/logo.png", width: 512, height: 512, alt: "AdaptivAI" },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "AdaptivAI - Intelligent Training Platform",
+    description: "Your AI-powered training companion for optimized performance",
+    images: ["/icons/icon-512.png"],
+  },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
   },
 };
 

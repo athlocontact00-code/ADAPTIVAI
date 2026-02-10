@@ -16,6 +16,9 @@ const envSchema = z
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
     STRIPE_PRICE_ID_PRO: z.string().optional(),
+    STRIPE_PRICE_ID_PRO_YEAR: z.string().optional(),
+    PRO_PRICE_ID_MONTHLY: z.string().optional(),
+    PRO_PRICE_ID_YEARLY: z.string().optional(),
     STRIPE_PRODUCT_ID_PRO: z.string().optional(),
 
     OPENAI_API_KEY: z.string().optional(),
@@ -34,10 +37,15 @@ const envSchema = z
       }
     }
 
+    const hasMonthlyPrice = Boolean(
+      (data.STRIPE_PRICE_ID_PRO && data.STRIPE_PRICE_ID_PRO.length >= 3) ||
+        (data.PRO_PRICE_ID_MONTHLY && data.PRO_PRICE_ID_MONTHLY.length >= 3)
+    );
     const stripeAny = Boolean(
       (data.STRIPE_SECRET_KEY && data.STRIPE_SECRET_KEY.length > 0) ||
         (data.STRIPE_WEBHOOK_SECRET && data.STRIPE_WEBHOOK_SECRET.length > 0) ||
-        (data.STRIPE_PRICE_ID_PRO && data.STRIPE_PRICE_ID_PRO.length > 0)
+        (data.STRIPE_PRICE_ID_PRO && data.STRIPE_PRICE_ID_PRO.length > 0) ||
+        (data.PRO_PRICE_ID_MONTHLY && data.PRO_PRICE_ID_MONTHLY.length > 0)
     );
 
     if (stripeAny) {
@@ -62,11 +70,12 @@ const envSchema = z
           message: "STRIPE_WEBHOOK_SECRET is required when Stripe billing is configured",
         });
       }
-      if (!data.STRIPE_PRICE_ID_PRO || data.STRIPE_PRICE_ID_PRO.length < 3) {
+      if (!hasMonthlyPrice) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["STRIPE_PRICE_ID_PRO"],
-          message: "STRIPE_PRICE_ID_PRO is required when Stripe billing is configured",
+          message:
+            "Monthly price is required when Stripe is configured. Set STRIPE_PRICE_ID_PRO or PRO_PRICE_ID_MONTHLY (must be a Stripe Price ID starting with price_).",
         });
       }
     }

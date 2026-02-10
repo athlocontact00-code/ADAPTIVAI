@@ -29,11 +29,12 @@ function getCheckoutEnv(): {
   STRIPE_PRICE_ID_PRO?: string;
   STRIPE_PRICE_ID_PRO_YEAR?: string;
 } {
+  const trim = (s: string | undefined) => (typeof s === "string" ? s.trim() || undefined : undefined);
   return {
-    PRO_PRICE_ID_MONTHLY: process.env.PRO_PRICE_ID_MONTHLY,
-    PRO_PRICE_ID_YEARLY: process.env.PRO_PRICE_ID_YEARLY,
-    STRIPE_PRICE_ID_PRO: process.env.STRIPE_PRICE_ID_PRO,
-    STRIPE_PRICE_ID_PRO_YEAR: process.env.STRIPE_PRICE_ID_PRO_YEAR,
+    PRO_PRICE_ID_MONTHLY: trim(process.env.PRO_PRICE_ID_MONTHLY),
+    PRO_PRICE_ID_YEARLY: trim(process.env.PRO_PRICE_ID_YEARLY),
+    STRIPE_PRICE_ID_PRO: trim(process.env.STRIPE_PRICE_ID_PRO),
+    STRIPE_PRICE_ID_PRO_YEAR: trim(process.env.STRIPE_PRICE_ID_PRO_YEAR),
   };
 }
 
