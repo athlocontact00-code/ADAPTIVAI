@@ -648,38 +648,11 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
               </CardTitle>
             </CardHeader>
 
-            <div className="border-b p-3">
-              <CoachCommandChips value={draft} onChange={setDraft} />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDraft("today's workouts")}
-                >
-                  Today’s workouts
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDraft("generate a 7 day training plan")}
-                >
-                  7‑day plan
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setDraft("I want to improve 10k pace. I can train 5h this week. My legs feel: fresh/heavy/sore.")
-                  }
-                >
-                  Goal + constraints
-                </Button>
-              </div>
+            <div className="border-b border-border/60 p-4 space-y-3 bg-muted/20">
+              <p className="text-sm font-medium text-foreground">Ask or choose a command</p>
+              <CoachCommandChips value={draft} onChange={setDraft} maxVisible={3} />
             </div>
-            
+
             {/* Messages */}
             <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
@@ -707,9 +680,9 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
             </CardContent>
 
             {/* Input */}
-            <div className="border-t p-4 space-y-3">
+            <div className="border-t border-border/60 p-4 space-y-3 bg-background">
               <CoachContextToggles value={contextPayload} onChange={setContextPayload} />
-              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-foreground/90 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={context?.coachIncludeResultTemplate !== false}
@@ -727,8 +700,9 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Ask a question or use a command chip…"
                 rows={3}
+                className="min-h-[44px] border-border/70 bg-card/80 text-foreground placeholder:text-muted-foreground focus-visible:ring-2"
               />
-              <Button onClick={handleSend} variant="outline" className="w-full">
+              <Button onClick={handleSend} variant="default" className="w-full min-h-[44px] font-medium">
                 <Send className="mr-2 h-4 w-4" />
                 Send
               </Button>

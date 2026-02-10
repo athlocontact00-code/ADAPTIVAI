@@ -138,7 +138,7 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
     : user.email?.slice(0, 2).toUpperCase() || "U";
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-[100dvh] bg-background flex flex-col">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -208,18 +208,22 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
       </aside>
 
       {/* Main content: scrollable column */}
-      <div className="lg:pl-64 flex flex-col min-h-screen min-h-[100dvh] w-full">
+      <div className="lg:pl-64 flex flex-col min-h-[100dvh] w-full">
         {showFinishSetupBanner && <FinishSetupBanner />}
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 safe-area-top shrink-0">
+        <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-3 sm:gap-4 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 safe-area-top shrink-0">
           <button
-            className="lg:hidden"
+            className="lg:hidden flex items-center justify-center w-10 h-10 -ml-2 rounded-lg touch-manipulation"
             onClick={() => setSidebarOpen(true)}
+            type="button"
+            aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
           </button>
-
-          <div className="flex-1" />
+          <Link href="/dashboard" className="lg:hidden flex items-center gap-2 shrink-0" aria-label="AdaptivAI Home">
+            <Logo size={24} className="h-6 w-6 shrink-0 object-contain" />
+          </Link>
+          <div className="flex-1 min-w-0" />
 
           {planBadge && (
             <Link
@@ -277,8 +281,8 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
           </DropdownMenu>
         </header>
 
-        {/* Page content: single primary scroll container; momentum scroll on iOS */}
-        <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto ux-scroll-main scroll-touch p-4 sm:p-6 md:p-8">
+        {/* Page content: single primary scroll container; momentum scroll on iOS; safe area bottom for iOS browser bar */}
+        <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto ux-scroll-main scroll-touch main-content-wrap p-4 sm:p-6 md:p-8">
           {children}
         </main>
       </div>

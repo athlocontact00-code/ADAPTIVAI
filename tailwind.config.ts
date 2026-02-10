@@ -9,6 +9,7 @@ const config: Config = {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
+    /* Breakpoints: mobile ≤640 (default), tablet sm 641+, desktop lg 1024+ */
     extend: {
       fontFamily: {
         sans: [

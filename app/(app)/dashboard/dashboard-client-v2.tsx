@@ -604,13 +604,14 @@ export function DashboardClientV2({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="page-container space-y-4 sm:space-y-6">
+      {/* Header: on mobile title + subtitle only; from sm: Compact + Export */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="type-h1">Dashboard</h1>
-          <p className="type-caption">Signals, next action, and trends — without the clutter.</p>
+          <h1 className="type-h1 text-xl sm:text-2xl">Dashboard</h1>
+          <p className="type-caption mt-0.5 text-foreground/80">Signals, next action, and trends — without the clutter.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-3 shrink-0">
           <CompactToggle value={compact} onChange={setCompact} />
           <Button
             variant="outline"
@@ -631,11 +632,11 @@ export function DashboardClientV2({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          A) STATUS ROW
+          A) MOBILE: above-the-fold = Today + Readiness only. TABLET/DESKTOP: 2-col (md) / 12-col (lg)
       ═══════════════════════════════════════════════════════════════════ */}
-      <section className="grid gap-4 lg:grid-cols-12">
-        {/* Action card */}
-        <div className="lg:col-span-8">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-12 lg:gap-4">
+        {/* Today card — mobile: full width first; md: left col; lg: 8 col */}
+        <div className="md:col-span-1 lg:col-span-8 order-1">
           <ActionCard
             title="Today"
             subtitle={heroSubtitle}
@@ -686,8 +687,129 @@ export function DashboardClientV2({
           />
         </div>
 
-        {/* Metric cards */}
-        <div className="lg:col-span-4 grid grid-cols-2 gap-3">
+        {/* Metrics: mobile = Readiness only above fold, then 3 more below; md/lg = one column with 2x2 grid */}
+        <div className="hidden lg:block lg:col-span-4 order-2">
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard
+              title="Readiness"
+              value={hasReadiness ? Math.round(readinessScore as number) : "—"}
+              unit={hasReadiness ? "%" : undefined}
+              hint={topFactor || (hasReadiness ? "Based on recent signals" : "No readiness data yet — complete check-in")}
+              sparkline={readinessSparkline.length >= 2 ? readinessSparkline : null}
+              tone={!hasReadiness ? "neutral" : (readinessScore ?? 0) >= 70 ? "success" : (readinessScore ?? 0) >= 45 ? "warning" : "danger"}
+              tooltip="Readiness estimates how prepared you are to handle intensity today (sleep, fatigue, stress, and recent load)."
+              density={density}
+            />
+            <MetricCard
+              title="Weekly Hours"
+              value={metrics.weeklyHours ?? "—"}
+              unit={metrics.weeklyHours != null ? "h" : undefined}
+              hint={
+                metrics.weeklyHours == null
+                  ? "No data yet — log completed workouts to see weekly hours."
+                  : (metrics.lastWeekHours ?? 0) > 0
+                    ? `Last week ${metrics.lastWeekHours}h`
+                    : "Build consistency week to week"
+              }
+              delta={metrics.weeklyHoursDelta}
+              deltaLabel="vs last week"
+              tooltip="Total completed training time in the last 7 days."
+              density={density}
+            />
+            <MetricCard
+              title="Weekly TSS"
+              value={metrics.weeklyTSS ?? "—"}
+              hint={
+                metrics.weeklyTSS == null
+                  ? "No data yet — log completed workouts with TSS to see load."
+                  : (metrics.lastWeekTSS ?? 0) > 0
+                    ? `Last week ${metrics.lastWeekTSS} TSS`
+                    : "Baseline will appear after a few sessions"
+              }
+              delta={metrics.weeklyTSSDelta}
+              deltaLabel="vs last week"
+              tooltip="Training Stress Score accumulated in the last 7 days."
+              density={density}
+            />
+            <MetricCard
+              title="Fitness (CTL)"
+              value={metrics.ctl != null ? Math.round(metrics.ctl) : "—"}
+              hint={
+                metrics.ctl != null && metrics.atl != null && metrics.tsb != null
+                  ? `ATL ${Math.round(metrics.atl)} • TSB ${Math.round(metrics.tsb)}`
+                  : "No data yet — complete workouts with TSS to see CTL/ATL/TSB."
+              }
+              delta={metrics.ctlDelta}
+              deltaLabel="14d trend"
+              sparkline={metrics.ctlSparkline.length >= 2 ? metrics.ctlSparkline : null}
+              tooltip="Chronic Training Load (CTL) is a 42‑day load average — a proxy for long-term fitness."
+              density={density}
+            />
+          </div>
+        </div>
+        {/* Mobile only: Readiness (above-the-fold) */}
+        <div className="md:hidden order-2">
+          <MetricCard
+            title="Readiness"
+            value={hasReadiness ? Math.round(readinessScore as number) : "—"}
+            unit={hasReadiness ? "%" : undefined}
+            hint={topFactor || (hasReadiness ? "Based on recent signals" : "No readiness data yet — complete check-in")}
+            sparkline={readinessSparkline.length >= 2 ? readinessSparkline : null}
+            tone={!hasReadiness ? "neutral" : (readinessScore ?? 0) >= 70 ? "success" : (readinessScore ?? 0) >= 45 ? "warning" : "danger"}
+            tooltip="Readiness estimates how prepared you are to handle intensity today (sleep, fatigue, stress, and recent load)."
+            density={density}
+          />
+        </div>
+        {/* Mobile only: Weekly Hours, TSS, CTL below Readiness */}
+        <div className="md:hidden order-3 grid grid-cols-2 gap-3">
+          <MetricCard
+            title="Weekly Hours"
+            value={metrics.weeklyHours ?? "—"}
+            unit={metrics.weeklyHours != null ? "h" : undefined}
+            hint={
+              metrics.weeklyHours == null
+                ? "No data yet — log completed workouts to see weekly hours."
+                : (metrics.lastWeekHours ?? 0) > 0
+                  ? `Last week ${metrics.lastWeekHours}h`
+                  : "Build consistency week to week"
+            }
+            delta={metrics.weeklyHoursDelta}
+            deltaLabel="vs last week"
+            tooltip="Total completed training time in the last 7 days."
+            density={density}
+          />
+          <MetricCard
+            title="Weekly TSS"
+            value={metrics.weeklyTSS ?? "—"}
+            hint={
+              metrics.weeklyTSS == null
+                ? "No data yet — log completed workouts with TSS to see load."
+                : (metrics.lastWeekTSS ?? 0) > 0
+                  ? `Last week ${metrics.lastWeekTSS} TSS`
+                  : "Baseline will appear after a few sessions"
+            }
+            delta={metrics.weeklyTSSDelta}
+            deltaLabel="vs last week"
+            tooltip="Training Stress Score accumulated in the last 7 days."
+            density={density}
+          />
+          <MetricCard
+            title="Fitness (CTL)"
+            value={metrics.ctl != null ? Math.round(metrics.ctl) : "—"}
+            hint={
+              metrics.ctl != null && metrics.atl != null && metrics.tsb != null
+                ? `ATL ${Math.round(metrics.atl)} • TSB ${Math.round(metrics.tsb)}`
+                : "No data yet — complete workouts with TSS to see CTL/ATL/TSB."
+            }
+            delta={metrics.ctlDelta}
+            deltaLabel="14d trend"
+            sparkline={metrics.ctlSparkline.length >= 2 ? metrics.ctlSparkline : null}
+            tooltip="Chronic Training Load (CTL) is a 42‑day load average — a proxy for long-term fitness."
+            density={density}
+          />
+        </div>
+        {/* Tablet (md): right column — on md we have 2 cols; right col needs metrics. Show same 4 metrics in 2x2 on tablet. */}
+        <div className="hidden md:grid lg:hidden md:col-span-1 order-2 grid-cols-2 gap-3">
           <MetricCard
             title="Readiness"
             value={hasReadiness ? Math.round(readinessScore as number) : "—"}

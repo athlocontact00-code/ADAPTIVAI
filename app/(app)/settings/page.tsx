@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -206,6 +206,7 @@ export default function SettingsPage() {
   const [adminResyncUserId, setAdminResyncUserId] = useState("");
   const [adminResyncLoading, setAdminResyncLoading] = useState(false);
   const [adminForceProLoading, setAdminForceProLoading] = useState(false);
+  const postCheckoutSyncDoneRef = useRef<string | null>(null);
 
   const profileDirty =
     JSON.stringify(profile) !== JSON.stringify(initialProfile) ||
@@ -250,57 +251,80 @@ export default function SettingsPage() {
   }, [initialProfile, initialZones, initialBenchmarks, initialAvailability, initialPreferences, initialGuardrails]);
 
   useEffect(() => {
+    const successParam = searchParams.get("success") === "1";
     const checkoutSuccess = searchParams.get("checkout") === "success";
     const portalReturn = searchParams.get("portal") === "return";
     const sessionId = (searchParams.get("session_id") ?? "").trim();
-    if (checkoutSuccess || portalReturn) {
-      setActiveTab("billing");
-      router.refresh();
-      setSyncingBilling(true);
-      const refetchPlan = () =>
-        fetch("/api/profile")
-          .then((res) => res.json())
-          .then((data) => {
-            if (data?.plan) setPlanInfo(data.plan);
-          })
-          .catch(() => {});
-      // Always use refresh=1 when returning from checkout/portal; session_id enables immediate sync from Stripe session
-      const statusUrl =
-        "/api/billing/status?refresh=1" +
-        (sessionId.startsWith("cs_") ? `&session_id=${encodeURIComponent(sessionId)}` : "");
-      fetch(statusUrl, { cache: "no-store", credentials: "same-origin" })
-        .then((res) => (res.ok ? res.json() : null))
+    const hasCheckoutSession = sessionId.startsWith("cs_");
+    const shouldSyncAfterPayment = hasCheckoutSession || successParam || checkoutSuccess || portalReturn;
+
+    if (!shouldSyncAfterPayment) return;
+
+    const syncKey = hasCheckoutSession ? sessionId : `refresh-${successParam}-${portalReturn}`;
+    if (postCheckoutSyncDoneRef.current === syncKey) return;
+    postCheckoutSyncDoneRef.current = syncKey;
+
+    setActiveTab("billing");
+    router.refresh();
+    setSyncingBilling(true);
+
+    const refetchPlan = () =>
+      fetch("/api/profile")
+        .then((res) => res.json())
         .then((data) => {
+          if (data?.plan) setPlanInfo(data.plan);
+        })
+        .catch(() => {});
+
+    const applyPlanFromData = (data: { plan?: string; status?: string; subscriptionStatus?: string; trialDaysRemaining?: number | null; currentPeriodEnd?: string | null; cancelAtPeriodEnd?: boolean } | null) => {
+      if (data && typeof data.plan === "string") {
+        setPlanInfo({
+          name: data.plan === "PRO" ? "Pro" : data.plan === "TRIAL" ? "Trial" : "Free",
+          status: typeof data.status === "string" ? data.status : (data.subscriptionStatus ?? ""),
+          trialDaysRemaining: data.trialDaysRemaining ?? null,
+          currentPeriodEnd: data.currentPeriodEnd ?? null,
+          cancelAtPeriodEnd: Boolean(data.cancelAtPeriodEnd),
+        });
+      } else {
+        refetchPlan();
+      }
+    };
+
+    const statusUrl =
+      "/api/billing/status?refresh=1" +
+      (hasCheckoutSession ? `&session_id=${encodeURIComponent(sessionId)}` : "");
+
+    fetch(statusUrl, { cache: "no-store", credentials: "same-origin" })
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (res.ok) {
           if (data?.canUsePro ?? data?.isPro) {
             toast.success("Subscription active. You now have Pro access.");
           }
-          // Update plan UI immediately from status response so PRO shows without waiting for /api/profile
-          if (data && typeof data.plan === "string") {
-            setPlanInfo({
-              name: data.plan === "PRO" ? "Pro" : data.plan === "TRIAL" ? "Trial" : "Free",
-              status: typeof data.status === "string" ? data.status : data.subscriptionStatus ?? "",
-              trialDaysRemaining: data.trialDaysRemaining ?? null,
-              currentPeriodEnd: data.currentPeriodEnd ?? null,
-              cancelAtPeriodEnd: Boolean(data.cancelAtPeriodEnd),
-            });
-          } else {
-            refetchPlan();
-          }
+          applyPlanFromData(data);
           router.refresh();
-        })
-        .catch(() => {
+        } else {
+          applyPlanFromData(data);
           refetchPlan();
           router.refresh();
-        })
-        .finally(() => setSyncingBilling(false));
-      const t = setTimeout(() => {
+          const msg = data?.error ?? "Could not sync subscription.";
+          toast.error(msg + " Click Refresh status to try again.");
+        }
+      })
+      .catch(() => {
+        toast.error("Could not sync subscription. Click Refresh status to try again.");
         refetchPlan();
         router.refresh();
-        setSyncingBilling(false);
-      }, 3000);
-      window.history.replaceState(null, "", window.location.pathname + (window.location.hash || ""));
-      return () => clearTimeout(t);
-    }
+      })
+      .finally(() => setSyncingBilling(false));
+
+    const t = setTimeout(() => {
+      refetchPlan();
+      router.refresh();
+    }, 3000);
+    window.history.replaceState(null, "", window.location.pathname + "?tab=billing" + (window.location.hash || ""));
+
+    return () => clearTimeout(t);
   }, [searchParams, router]);
 
   useEffect(() => {
@@ -1641,6 +1665,12 @@ export default function SettingsPage() {
                               : planInfo?.name === "Trial"
                                 ? `Trial · ${planInfo?.trialDaysRemaining ?? "—"} days left`
                                 : planInfo?.status ?? "—"}
+                            {planInfo?.name === "Pro" && planInfo?.currentPeriodEnd && (
+                              <span className="block mt-0.5 normal-case text-muted-foreground/90">
+                                {planInfo.cancelAtPeriodEnd ? "Access until " : "Renews "}
+                                {new Date(planInfo.currentPeriodEnd).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -1675,6 +1705,9 @@ export default function SettingsPage() {
                     </Button>
                     {planInfo?.name === "Pro" ? (
                       <>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Full access to AI Coach, Simulator & reports.
+                        </p>
                         <Button
                           onClick={openBillingPortal}
                           disabled={isOpeningPortal}
@@ -1683,7 +1716,7 @@ export default function SettingsPage() {
                           {isOpeningPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manage subscription"}
                         </Button>
                         <p className="text-[11px] text-muted-foreground mt-1.5">
-                          Manage subscription opens the Stripe portal and returns you here when done.
+                          Opens Stripe customer portal. You can update payment or cancel there.
                         </p>
                       </>
                     ) : (

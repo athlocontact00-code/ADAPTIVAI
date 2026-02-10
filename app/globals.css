@@ -104,6 +104,7 @@
   }
   html {
     height: 100%;
+    min-height: 100dvh;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
   }
@@ -111,6 +112,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
     @apply bg-background text-foreground antialiased;
     min-height: 100%;
+    min-height: 100dvh;
     overflow-x: hidden;
     overscroll-behavior-x: none;
     font-feature-settings: "rlig" 1, "calt" 1;
@@ -258,6 +260,11 @@
   padding-top: env(safe-area-inset-top, 0px);
 }
 .safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Main content: reserve space above for sticky header; bottom safe area for iOS browser bar */
+.main-content-wrap {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 

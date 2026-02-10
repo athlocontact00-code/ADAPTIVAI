@@ -20,7 +20,7 @@ export function Logo({
       alt={alt}
       width={size}
       height={size}
-      className={cn("shrink-0", className)}
+      className={cn("shrink-0 object-contain", className)}
       priority
     />
   );

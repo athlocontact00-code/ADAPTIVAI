@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: "AdaptivAI - Intelligent Training Platform",
   description: "Your AI-powered training companion for optimized performance",
-  manifest: "/manifest.webmanifest?v=2",
+  manifest: "/manifest.webmanifest?v=3",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -66,7 +66,7 @@ export default async function RootLayout({
 
   return (
     <html lang={typeof locale === "string" ? locale : "en"} className="dark" suppressHydrationWarning>
-      <body className="min-h-screen font-sans">
+      <body className="min-h-screen min-h-[100dvh] font-sans">
         <SessionProvider>
           <NextIntlClientProvider locale={locale} messages={messages ?? undefined}>
             <I18nProvider serverLocale={locale} serverMessages={messages ?? undefined}>
