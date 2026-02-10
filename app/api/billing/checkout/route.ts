@@ -11,6 +11,7 @@ import {
   normalizePlan,
   type BillingPlan,
 } from "@/lib/billing/checkout-prices";
+import { getAppUrl, BILLING_SETTINGS_PATH } from "@/lib/app-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,12 +22,6 @@ const bodySchema = z
     idempotencyKey: z.string().max(128).optional(),
   })
   .optional();
-
-function getAppUrl(): string {
-  const url = process.env.APP_URL;
-  if (!url) throw new Error("Missing APP_URL");
-  return url.replace(/\/$/, "");
-}
 
 function getCheckoutEnv(): {
   PRO_PRICE_ID_MONTHLY?: string;
@@ -64,10 +59,7 @@ function errorToResponse(error: unknown): NextResponse {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (
-    message.includes("Missing APP_URL") ||
-    message.includes("Missing STRIPE_SECRET_KEY")
-  ) {
+  if (message.includes("Missing STRIPE_SECRET_KEY")) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
@@ -98,7 +90,7 @@ export async function POST(req: Request) {
         const appUrl = getAppUrl();
         const portalSession = await stripe.billingPortal.sessions.create({
           customer: stripeCustomerId,
-          return_url: `${appUrl}/settings`,
+          return_url: `${appUrl}${BILLING_SETTINGS_PATH}`,
         });
         return NextResponse.json(
           {
@@ -161,7 +153,7 @@ export async function POST(req: Request) {
         // ignore
       }
       try {
-        const u = process.env.APP_URL;
+        const u = getAppUrl();
         if (u) return new URL(u).host;
       } catch {
         // ignore
@@ -193,8 +185,8 @@ export async function POST(req: Request) {
         customer: stripeCustomerId,
         client_reference_id: user.id,
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${appUrl}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appUrl}/settings?checkout=cancel`,
+        success_url: `${appUrl}${BILLING_SETTINGS_PATH}&success=1&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}${BILLING_SETTINGS_PATH}&canceled=1`,
         allow_promotion_codes: true,
         subscription_data: {
           metadata: {

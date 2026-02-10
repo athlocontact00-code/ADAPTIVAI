@@ -5,6 +5,9 @@ import { getStripeClient } from "@/lib/stripe";
 import { syncSubscriptionFromStripe } from "@/lib/billing/stripe-sync";
 import { resolveSubscriptionFromInvoice } from "@/lib/billing/webhook-invoice";
 import { createRequestId, logInfo, logWarn, logError } from "@/lib/logger";
+import { getAppUrl } from "@/lib/app-url";
+
+const WEBHOOK_PATH = "/api/billing/webhook";
 
 function getWebhookSecret(): string {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -12,6 +15,20 @@ function getWebhookSecret(): string {
     throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
   }
   return secret;
+}
+
+let _webhookUrlLogged = false;
+function logExpectedWebhookUrlOnce(): void {
+  if (_webhookUrlLogged) return;
+  _webhookUrlLogged = true;
+  const base = getAppUrl();
+  const expected = `${base}${WEBHOOK_PATH}`;
+  logInfo("webhook.expected_url", { expectedUrl: expected });
+  if (process.env.NODE_ENV === "production" && !process.env.APP_URL) {
+    logWarn("webhook.app_url_missing", {
+      message: "APP_URL is not set in production; Stripe Dashboard webhook URL should use canonical base (e.g. https://www.adaptivai.online)",
+    });
+  }
 }
 
 async function markProcessed(stripeEventId: string): Promise<void> {
@@ -32,6 +49,8 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+
+  logExpectedWebhookUrlOnce();
 
   const signature = req.headers.get("stripe-signature");
   if (!signature) {

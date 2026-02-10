@@ -11,6 +11,7 @@ const envSchema = z
     INTERNAL_CRON_SECRET: z.string().optional(),
 
     APP_URL: z.string().url().optional(),
+    NEXT_PUBLIC_APP_URL: z.string().url().optional(),
     BILLING_GRACE_DAYS: z.string().optional(),
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),

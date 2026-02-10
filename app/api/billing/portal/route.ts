@@ -4,15 +4,10 @@ import { db } from "@/lib/db";
 import { createRequestId, logError } from "@/lib/logger";
 import { getStripeClient } from "@/lib/stripe";
 import { ensureStripeCustomerForUser } from "@/lib/billing/stripe-customer";
+import { getAppUrl, BILLING_SETTINGS_PATH } from "@/lib/app-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function getAppUrl(): string {
-  const url = process.env.APP_URL;
-  if (!url) throw new Error("Missing APP_URL");
-  return url.replace(/\/$/, "");
-}
 
 export async function POST() {
   try {
@@ -38,7 +33,7 @@ export async function POST() {
 
     const portal = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${appUrl}/settings?billing=portal`,
+      return_url: `${appUrl}${BILLING_SETTINGS_PATH}`,
     });
 
     return NextResponse.json({ url: portal.url });
@@ -47,9 +42,7 @@ export async function POST() {
     const message =
       error instanceof Error ? error.message : "Failed to create billing portal session";
     const isConfigError =
-      message.includes("APP_URL") ||
-      message.includes("STRIPE") ||
-      message.includes("Missing");
+      message.includes("STRIPE") || message.includes("Missing");
     return NextResponse.json(
       { error: isConfigError ? message : "Billing portal temporarily unavailable. Please try again." },
       { status: 500 }
