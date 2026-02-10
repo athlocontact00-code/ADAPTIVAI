@@ -3,8 +3,9 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-const MARK_DARK = "/brand/logo-mark-dark.svg";
-const LOCKUP_DARK = "/brand/logo-lockup-dark.svg";
+const ASSET_VERSION = "5";
+const MARK_DARK = `/brand/logo-mark-dark.svg?v=${ASSET_VERSION}`;
+const LOCKUP_DARK = `/brand/logo-lockup-dark.svg?v=${ASSET_VERSION}`;
 
 export function Logo({
   size = 32,

@@ -78,7 +78,7 @@ export function AutoCreateWizard({ open, onOpenChange, onSubmit }: AutoCreateWiz
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" aria-describedby="wizard-desc">
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto scroll-touch" aria-describedby="wizard-desc">
         <p id="wizard-desc" className="sr-only">Create a season in 3 steps: Goal, Constraints, Style</p>
         <DialogHeader>
           <DialogTitle>Auto-Create Season</DialogTitle>

@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { CoachCommandChips } from "@/components/coach/command-chips";
+import { CoachCommandChips, type CoachCommandChip } from "@/components/coach/command-chips";
 import { CoachCommandCenter } from "@/components/coach/coach-command-center";
 import { CoachMessageRenderer } from "@/components/coach/coach-message-renderer";
 import { CoachContextToggles, type CoachContextPayload } from "@/components/coach/coach-context-toggles";
@@ -39,6 +39,19 @@ import { isSendToCalendarIntent, extractCoachIntent } from "@/lib/utils/coach-in
 
 const EMPTY_STATE_MESSAGE =
   "No workouts yet. Generate today's workout or start a chat.";
+
+// Mobile-only command palette: 1 quick prompt + More actions (bottom sheet).
+const MOBILE_CHIPS: CoachCommandChip[] = [
+  { label: "What should I do today?", template: "What should I do today?" },
+  { label: "Generate today", template: "Generate today's workout" },
+  { label: "Plan week", template: "Generate a week training plan" },
+  { label: "Add swim", template: "Add a swim session to my plan" },
+  { label: "Change tomorrow", template: "Change tomorrow's workout" },
+  { label: "Adjust based on check-in", template: "Adjust today based on check-in" },
+  { label: "Explain today", template: "Explain today's workout" },
+  { label: "Adjust my plan…", template: "Adjust my plan due to: [fatigue/soreness/time]" },
+  { label: "Summarize last 7 days", template: "Summarize my last 7 days" },
+];
 interface PlanLog {
   id: string;
   startDate: Date;
@@ -569,52 +582,54 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
   }
 
   return (
-    <div className="page-container space-y-6">
+    <div className="page-container space-y-4 sm:space-y-6">
       {/* Burnout Warning Banner */}
       {psychologyData?.burnout && (psychologyData.burnout.status === "MODERATE" || psychologyData.burnout.status === "HIGH") && (
-        <Card className={`border-l-4 ${psychologyData.burnout.status === "HIGH" ? "border-l-red-500 bg-red-500/5" : "border-l-yellow-500 bg-yellow-500/5"}`}>
-          <CardContent className="py-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className={`h-5 w-5 mt-0.5 ${psychologyData.burnout.status === "HIGH" ? "text-red-500" : "text-yellow-500"}`} />
-              <div className="flex-1">
-                <p className="font-medium">
-                  {psychologyData.burnout.status === "HIGH" ? "High Burnout Risk Detected" : "Burnout Warning"}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {psychologyData.burnout.recommendation}
-                </p>
-                {psychologyData.burnout.actions.length > 0 && (
-                  <div className="flex gap-2 mt-3">
-                    {psychologyData.burnout.actions.map((action) => (
-                      <Button
-                        key={action.id}
-                        variant={action.id === "recovery" ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handleBurnoutAction(action.id)}
-                        disabled={isApplyingAction !== null}
-                      >
-                        {isApplyingAction === action.id ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Applying...
-                          </>
-                        ) : (
-                          <>
-                            {action.id === "recovery" ? <Heart className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                            {action.label}
-                          </>
-                        )}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+        <div className="hidden sm:block">
+          <Card className={`border-l-4 ${psychologyData.burnout.status === "HIGH" ? "border-l-red-500 bg-red-500/5" : "border-l-yellow-500 bg-yellow-500/5"}`}>
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className={`h-5 w-5 mt-0.5 ${psychologyData.burnout.status === "HIGH" ? "text-red-500" : "text-yellow-500"}`} />
+                <div className="flex-1">
+                  <p className="font-medium">
+                    {psychologyData.burnout.status === "HIGH" ? "High Burnout Risk Detected" : "Burnout Warning"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {psychologyData.burnout.recommendation}
+                  </p>
+                  {psychologyData.burnout.actions.length > 0 && (
+                    <div className="flex gap-2 mt-3">
+                      {psychologyData.burnout.actions.map((action) => (
+                        <Button
+                          key={action.id}
+                          variant={action.id === "recovery" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleBurnoutAction(action.id)}
+                          disabled={isApplyingAction !== null}
+                        >
+                          {isApplyingAction === action.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Applying...
+                            </>
+                          ) : (
+                            <>
+                              {action.id === "recovery" ? <Heart className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                              {action.label}
+                            </>
+                          )}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="hidden sm:flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <Bot className="h-5 w-5 text-primary" />
@@ -638,7 +653,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Main Chat Panel — on mobile show first so chat is visible */}
         <div className="order-first lg:order-none lg:col-span-2">
-          <Card className="flex flex-col min-h-[320px] h-[50vh] sm:h-[480px] lg:h-[600px]">
+          <Card className="flex flex-col min-h-[420px] h-[70dvh] sm:min-h-[320px] sm:h-[480px] lg:h-[600px]">
             <CardHeader className="border-b">
               <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                 <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />
@@ -646,7 +661,15 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
               </CardTitle>
             </CardHeader>
 
-            <div className="border-b border-border/60 p-3 sm:p-4 space-y-3 bg-muted/20 min-w-0">
+            {/* MOBILE: minimal quick prompt + More actions */}
+            <div className="sm:hidden border-b border-border/60 p-3 bg-muted/20 min-w-0">
+              <div className="min-w-0 overflow-hidden">
+                <CoachCommandChips value={draft} onChange={setDraft} chips={MOBILE_CHIPS} maxVisible={1} />
+              </div>
+            </div>
+
+            {/* DESKTOP/TABLET: command chips */}
+            <div className="hidden sm:block border-b border-border/60 p-4 space-y-3 bg-muted/20 min-w-0">
               <p className="text-sm font-medium text-foreground">Ask or choose a command</p>
               <div className="min-w-0 overflow-hidden">
                 <CoachCommandChips value={draft} onChange={setDraft} maxVisible={3} />
@@ -654,7 +677,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
             </div>
 
             {/* Messages */}
-            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+            <CardContent className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 scroll-touch">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -680,21 +703,23 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
             </CardContent>
 
             {/* Input */}
-            <div className="border-t border-border/60 p-4 space-y-3 bg-background">
-              <CoachContextToggles value={contextPayload} onChange={setContextPayload} />
-              <label className="flex items-start sm:items-center gap-2 text-sm text-foreground/90 cursor-pointer min-w-0">
-                <input
-                  type="checkbox"
-                  checked={context?.coachIncludeResultTemplate !== false}
-                  onChange={async (e) => {
-                    const checked = e.target.checked;
-                    const res = await updateCoachIncludeResultTemplate(checked);
-                    if (res.success) router.refresh();
-                  }}
-                  className="rounded border-input shrink-0 mt-0.5 sm:mt-0"
-                />
-                <span className="min-w-0">Include result template in workout descriptions</span>
-              </label>
+            <div className="border-t border-border/60 p-4 space-y-3 bg-background safe-area-inset-bottom">
+              <div className="hidden sm:block">
+                <CoachContextToggles value={contextPayload} onChange={setContextPayload} />
+                <label className="mt-3 flex items-start sm:items-center gap-2 text-sm text-foreground/90 cursor-pointer min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={context?.coachIncludeResultTemplate !== false}
+                    onChange={async (e) => {
+                      const checked = e.target.checked;
+                      const res = await updateCoachIncludeResultTemplate(checked);
+                      if (res.success) router.refresh();
+                    }}
+                    className="rounded border-input shrink-0 mt-0.5 sm:mt-0"
+                  />
+                  <span className="min-w-0">Include result template in workout descriptions</span>
+                </label>
+              </div>
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -711,12 +736,12 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
         </div>
 
         {/* Command center: on mobile below chat (order-2), on lg full width above (lg:order-first lg:col-span-3) */}
-        <div className="order-2 lg:order-first lg:col-span-3">
+        <div className="hidden sm:block order-2 lg:order-first lg:col-span-3">
           <CoachCommandCenter pageData={pageData} context={context} onCommand={handleCommand} onRefresh={() => router.refresh()} />
         </div>
 
         {/* Chats sidebar */}
-        <div className="order-3 lg:col-span-1 space-y-4">
+        <div className="hidden sm:block order-3 lg:col-span-1 space-y-4">
           <Card className="border-border/50 overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center justify-between">

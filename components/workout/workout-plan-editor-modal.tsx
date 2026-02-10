@@ -208,7 +208,7 @@ export function WorkoutPlanEditorModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl p-0 overflow-hidden">
-        <div className="flex flex-col max-h-[85vh]">
+        <div className="flex flex-col max-h-[85dvh]">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
             <div className="flex items-start justify-between gap-4 pr-10">
               <div className="min-w-0">

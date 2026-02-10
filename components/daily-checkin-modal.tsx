@@ -402,7 +402,7 @@ export function DailyCheckInModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="sm:max-w-4xl max-h-[100dvh] overflow-y-auto scroll-touch safe-area-inset-bottom">
         <DialogHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-1">

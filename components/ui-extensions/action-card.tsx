@@ -14,15 +14,15 @@ function ActionButton({ action, size }: { action: Action; size: "default" | "lg"
   const variant = action.variant ?? "default";
   if ("href" in action) {
     return (
-      <Link href={action.href}>
-        <Button size={size} variant={variant} className="font-medium">
+      <Link href={action.href} className="w-full sm:w-auto">
+        <Button size={size} variant={variant} className="font-medium w-full sm:w-auto">
           {action.label}
         </Button>
       </Link>
     );
   }
   return (
-    <Button size={size} variant={variant} onClick={action.onClick} className="font-medium">
+    <Button size={size} variant={variant} onClick={action.onClick} className="font-medium w-full sm:w-auto">
       {action.label}
     </Button>
   );
@@ -65,7 +65,12 @@ export function ActionCard({
             </div>
             <div className={cn("text-muted-foreground/80 max-w-xl leading-relaxed", subtitleCls)}>{subtitle}</div>
 
-            <div className={cn("mt-4 flex flex-wrap items-center gap-2", density === "compact" ? "mt-3" : "mt-4")}>
+            <div
+              className={cn(
+                "mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center",
+                density === "compact" ? "mt-3" : "mt-4"
+              )}
+            >
               <ActionButton action={primary} size={buttonSize} />
               {secondary ? (
                 <ActionButton action={{ ...secondary, variant: secondary.variant ?? "outline" }} size={buttonSize} />

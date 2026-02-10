@@ -14,16 +14,19 @@ const root = join(__dirname, "..");
 const brandDir = join(root, "public", "brand");
 const outDir = join(root, "public", "icons");
 const THEME = "#0B0B0F";
-const PATH_A =
-  'M32 14 L54 56 L50 56 L50 42 L14 42 L14 56 L10 56 Z M32 20 L24 38 L40 38 Z';
+const STROKE_A = 6;
+const STROKE_EKG = 5;
+const PATH_A = "M12 56 L32 12 L52 56";
+const PATH_EKG = "M19.27 40 L29 40 L32 33 L35 40 L44.73 40";
 
 function svgIcon(size, contentScale = 0.88) {
   const pad = (size * (1 - contentScale)) / 2;
   const scale = (size * contentScale) / 64;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <rect width="${size}" height="${size}" fill="${THEME}"/>
-  <g transform="translate(${pad},${pad}) scale(${scale})" fill="#FFFFFF">
-    <path fill-rule="evenodd" d="${PATH_A}"/>
+  <g transform="translate(${pad},${pad}) scale(${scale})" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="${PATH_A}" stroke-width="${STROKE_A}"/>
+    <path d="${PATH_EKG}" stroke-width="${STROKE_EKG}"/>
   </g>
 </svg>`;
 }
@@ -63,7 +66,9 @@ async function main() {
   console.log("Written maskable-512.png, icon-512-maskable.png, icon-192-maskable.png");
 
   await writeFile(join(root, "public", "apple-touch-icon.png"), await icon1024.clone().resize(180, 180).png().toBuffer());
-  await writeFile(join(root, "public", "favicon.png"), await icon1024.clone().resize(32, 32).png().toBuffer());
+  const fav48 = await icon1024.clone().resize(48, 48).png().toBuffer();
+  await writeFile(join(root, "public", "favicon.png"), fav48);
+  await writeFile(join(root, "public", "favicon-48.png"), fav48);
   await writeFile(join(root, "public", "favicon-32.png"), await icon1024.clone().resize(32, 32).png().toBuffer());
   await writeFile(join(root, "public", "favicon-16.png"), await icon1024.clone().resize(16, 16).png().toBuffer());
   await writeFile(join(root, "public", "logo.png"), await icon1024.clone().resize(512, 512).png().toBuffer());

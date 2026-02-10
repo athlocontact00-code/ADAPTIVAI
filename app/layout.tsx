@@ -15,12 +15,13 @@ export const viewport: Viewport = {
 };
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://www.adaptivai.online";
+const assetVersion = "5";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: "AdaptivAI - Intelligent Training Platform",
   description: "Your AI-powered training companion for optimized performance",
-  manifest: "/manifest.webmanifest?v=3",
+  manifest: `/manifest.webmanifest?v=${assetVersion}`,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -28,11 +29,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
+      { url: `/favicon-16.png?v=${assetVersion}`, sizes: "16x16", type: "image/png" },
+      { url: `/favicon-32.png?v=${assetVersion}`, sizes: "32x32", type: "image/png" },
+      { url: `/favicon-48.png?v=${assetVersion}`, sizes: "48x48", type: "image/png" },
+      { url: `/favicon.png?v=${assetVersion}`, sizes: "48x48", type: "image/png" },
     ],
-    apple: [{ url: "/icons/icon-180.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: `/apple-touch-icon.png?v=${assetVersion}`, sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     type: "website",
@@ -40,15 +42,15 @@ export const metadata: Metadata = {
     description: "Your AI-powered training companion for optimized performance",
     siteName: "AdaptivAI",
     images: [
-      { url: "/icons/icon-512.png", width: 512, height: 512, alt: "AdaptivAI" },
-      { url: "/logo.png", width: 512, height: 512, alt: "AdaptivAI" },
+      { url: `/icons/icon-512.png?v=${assetVersion}`, width: 512, height: 512, alt: "AdaptivAI" },
+      { url: `/logo.png?v=${assetVersion}`, width: 512, height: 512, alt: "AdaptivAI" },
     ],
   },
   twitter: {
     card: "summary",
     title: "AdaptivAI - Intelligent Training Platform",
     description: "Your AI-powered training companion for optimized performance",
-    images: ["/icons/icon-512.png"],
+    images: [`/icons/icon-512.png?v=${assetVersion}`],
   },
   other: {
     "apple-mobile-web-app-capable": "yes",

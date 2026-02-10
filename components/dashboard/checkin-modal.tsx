@@ -202,39 +202,41 @@ export function CheckinModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[440px] p-0 gap-0 overflow-hidden">
-        <DialogHeader className="p-5 pb-4 border-b border-border/50">
-          <DialogTitle className="text-base font-semibold">
-            {step === 1 ? "How do you feel today?" : "Training readiness"}
-          </DialogTitle>
-          <div className="flex gap-1.5 mt-2">
-            <div
-              className={cn(
-                "h-1 flex-1 rounded-full transition-colors",
-                step >= 1 ? "bg-primary" : "bg-muted"
-              )}
-            />
-            <div
-              className={cn(
-                "h-1 flex-1 rounded-full transition-colors",
-                step >= 2 ? "bg-primary" : "bg-muted"
-              )}
-            />
-          </div>
-        </DialogHeader>
-
-        {success ? (
-          <div className="p-8 flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+      <DialogContent className="sm:max-w-[440px] p-0 gap-0 overflow-hidden max-h-[100dvh]">
+        <div className="flex flex-col max-h-[100dvh]">
+          <DialogHeader className="p-5 pb-4 border-b border-border/50 shrink-0">
+            <DialogTitle className="text-base font-semibold">
+              {step === 1 ? "How do you feel today?" : "Training readiness"}
+            </DialogTitle>
+            <div className="flex gap-1.5 mt-2">
+              <div
+                className={cn(
+                  "h-1 flex-1 rounded-full transition-colors",
+                  step >= 1 ? "bg-primary" : "bg-muted"
+                )}
+              />
+              <div
+                className={cn(
+                  "h-1 flex-1 rounded-full transition-colors",
+                  step >= 2 ? "bg-primary" : "bg-muted"
+                )}
+              />
             </div>
-            <p className="text-sm font-medium mb-1">Saved successfully</p>
-            <p className="text-xs text-muted-foreground">
-              Coach will adjust today if needed.
-            </p>
-          </div>
-        ) : step === 1 ? (
-          <div className="p-5 space-y-5">
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-touch">
+            {success ? (
+              <div className="p-8 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                </div>
+                <p className="text-sm font-medium mb-1">Saved successfully</p>
+                <p className="text-xs text-muted-foreground">
+                  Coach will adjust today if needed.
+                </p>
+              </div>
+            ) : step === 1 ? (
+              <div className="p-5 space-y-5">
             {/* Sleep Quality */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
@@ -519,10 +521,11 @@ export function CheckinModal({
             )}
           </div>
         )}
+          </div>
 
         {/* Footer */}
         {!success && (
-          <div className="p-4 border-t border-border/50 flex gap-2">
+          <div className="shrink-0 p-4 border-t border-border/50 flex gap-2 safe-area-inset-bottom">
             {step === 1 ? (
               <>
                 <Button variant="ghost" className="flex-1" onClick={handleClose}>
@@ -557,6 +560,7 @@ export function CheckinModal({
             )}
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

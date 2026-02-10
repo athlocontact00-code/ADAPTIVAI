@@ -448,7 +448,6 @@ const CalendarDayCell = memo(({
   onFeedback,
   hasFeedback,
 }: CalendarDayCellProps) => {
-  const t = useTranslations("calendar");
   const readiness = getReadinessTone(readinessScore);
   const visible = workouts.slice(0, maxVisible);
   const overflow = workouts.slice(maxVisible);
@@ -456,11 +455,12 @@ const CalendarDayCell = memo(({
   return (
     <div
       className={cn(
-        "group relative min-h-[100px] sm:min-h-[120px] cursor-pointer rounded-card border border-border/70 bg-card/80 p-2 transition-default overflow-hidden",
+        "group relative min-h-[100px] sm:min-h-[120px] cursor-pointer rounded-card border border-border/70 bg-card/80 p-2 transition-default overflow-hidden touch-manipulation select-none",
         "hover:border-border hover:bg-card",
         !inMonth && "opacity-50",
         isSelected && "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-sm",
-        isToday && !isSelected && "ring-1 ring-primary/80"
+        isToday && !isSelected && "ring-1 ring-primary/80",
+        isToday && "bg-primary/5"
       )}
       onClick={() => onSelect(day)}
       role="button"
@@ -468,13 +468,13 @@ const CalendarDayCell = memo(({
     >
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1.5 min-w-0">
-          <div className={cn("text-sm font-semibold tabular-nums text-foreground shrink-0", isToday && "text-primary")}>{day.getDate()}</div>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <span className={cn("h-2 w-2 rounded-full", readiness.dotClass)} />
+          <div className={cn("text-base sm:text-sm font-semibold tabular-nums text-foreground shrink-0", isToday && "text-primary")}>{day.getDate()}</div>
+          <div className="flex items-center gap-1 text-[11px] sm:text-[10px] text-muted-foreground">
+            <span className={cn("h-2.5 w-2.5 sm:h-2 sm:w-2 rounded-full", readiness.dotClass)} />
             {typeof readinessScore === "number" ? (
-              <span className="tabular-nums">{readinessScore}</span>
+              <span className="hidden sm:inline tabular-nums">{readinessScore}</span>
             ) : (
-              <span className="opacity-60">—</span>
+              <span className="hidden sm:inline opacity-60">—</span>
             )}
           </div>
         </div>
@@ -484,15 +484,15 @@ const CalendarDayCell = memo(({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[10px] opacity-0 group-hover:opacity-100"
+              className="h-8 w-8 p-0 opacity-100 sm:h-6 sm:w-auto sm:px-2 sm:text-[10px] sm:opacity-0 sm:group-hover:opacity-100"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
               }}
               aria-label="Add workout"
             >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Add
+              <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5 sm:mr-1" />
+              <span className="hidden sm:inline">Add</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -511,7 +511,26 @@ const CalendarDayCell = memo(({
         </DropdownMenu>
       </div>
 
-      <div className="mt-1.5 space-y-1 min-h-0 overflow-hidden">
+      {/* MOBILE: simple dots + count (details in Agenda below the grid) */}
+      <div className="mt-2 sm:hidden">
+        {workouts.length === 0 ? (
+          <div className="h-2 w-10 rounded-full bg-muted/30 group-hover:bg-muted/40 transition-colors" aria-hidden />
+        ) : (
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: Math.min(3, workouts.length) }).map((_, i) => (
+              <span key={i} className="h-1.5 w-1.5 rounded-full bg-foreground/35" aria-hidden />
+            ))}
+            {workouts.length > 3 ? (
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                +{workouts.length - 3}
+              </span>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* DESKTOP/TABLET: chips inside the cell */}
+      <div className="hidden sm:block mt-1.5 space-y-1 min-h-0 overflow-hidden">
         {visible.length === 0 ? (
           <div className="h-5 rounded-sm bg-muted/30 group-hover:bg-muted/40 transition-colors" aria-hidden />
         ) : (
@@ -1755,7 +1774,7 @@ export function CalendarClient({
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 min-w-0">
         <div className="space-y-2 min-w-0">
-          <div className="grid grid-cols-7 gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-7 gap-2 text-[11px] uppercase tracking-wider text-foreground/70 sm:text-muted-foreground">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="px-1">
                 {d}
@@ -1793,29 +1812,94 @@ export function CalendarClient({
               );
             })}
           </div>
+
+          {/* MOBILE: Agenda (tap day -> list below) */}
+          <div className="sm:hidden pt-4">
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Agenda</CardTitle>
+                <div className="text-xs text-muted-foreground">
+                  {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {selectedDayWorkouts.length === 0 ? (
+                  <div className="rounded-control border border-border/50 bg-muted/10 p-3">
+                    <div className="text-sm font-medium">No workouts</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Tap another day or add a workout in the calendar.
+                    </div>
+                  </div>
+                ) : (
+                  selectedDayWorkouts.map((w) => {
+                    const meta = workoutTypes.find((t) => t.value === w.type);
+                    const Icon = meta?.icon ?? Activity;
+                    const status = getWorkoutStatus(w);
+                    const statusMeta =
+                      status === "done"
+                        ? { variant: "success" as const, label: "Done" }
+                        : status === "planned"
+                          ? { variant: "secondary" as const, label: "Planned" }
+                          : status === "missed"
+                            ? { variant: "warning" as const, label: "Missed" }
+                            : { variant: "muted" as const, label: "Skipped" };
+                    const dur = typeof w.durationMin === "number" && w.durationMin > 0 ? `${w.durationMin} min` : null;
+                    const tss = typeof w.tss === "number" && w.tss > 0 ? `${w.tss} TSS` : null;
+                    return (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => openWorkoutDetail(w)}
+                        className="w-full text-left rounded-control border border-border/50 bg-card/60 hover:bg-card/80 transition-colors px-3 py-3 min-h-[44px]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <div className="text-sm font-medium truncate">{w.title}</div>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                              <span className="capitalize">{meta?.label ?? w.type}</span>
+                              {dur ? <span className="tabular-nums">{dur}</span> : null}
+                              {tss ? <span className="tabular-nums">{tss}</span> : null}
+                            </div>
+                          </div>
+                          <Badge variant={statusMeta.variant} className="shrink-0">
+                            {statusMeta.label}
+                          </Badge>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-        <CalendarSidePanel
-          tab={panelTab}
-          onTabChange={setPanelTab}
-          selectedDate={selectedDate}
-          dayWorkouts={selectedDayWorkouts}
-          dayCheckIn={selectedDayCheckIn}
-          dayNeedsCheckIn={selectedDayNeedsCheckIn}
-          weeklySummary={weeklySummary}
-          weekWorkouts={weekWorkoutList}
-          monthlySummary={monthlySummary}
-          rampRisk={rampRisk}
-          monthGridDays={grid.days}
-          workoutsByDate={workoutsByDate}
-          onOpenWorkout={openWorkoutDetail}
-          onEditWorkout={openEditWorkout}
-          onToggleComplete={toggleComplete}
-          onDeleteWorkout={deleteWorkout}
-          onFeedback={openFeedbackForWorkout}
-          onQuickAdd={openQuickAdd}
-          onOpenCheckIn={openCheckInForWorkout}
-          onGenerateWeekPlan={handleGenerateWeekPlan}
-        />
+        <div className="hidden sm:block">
+          <CalendarSidePanel
+            tab={panelTab}
+            onTabChange={setPanelTab}
+            selectedDate={selectedDate}
+            dayWorkouts={selectedDayWorkouts}
+            dayCheckIn={selectedDayCheckIn}
+            dayNeedsCheckIn={selectedDayNeedsCheckIn}
+            weeklySummary={weeklySummary}
+            weekWorkouts={weekWorkoutList}
+            monthlySummary={monthlySummary}
+            rampRisk={rampRisk}
+            monthGridDays={grid.days}
+            workoutsByDate={workoutsByDate}
+            onOpenWorkout={openWorkoutDetail}
+            onEditWorkout={openEditWorkout}
+            onToggleComplete={toggleComplete}
+            onDeleteWorkout={deleteWorkout}
+            onFeedback={openFeedbackForWorkout}
+            onQuickAdd={openQuickAdd}
+            onOpenCheckIn={openCheckInForWorkout}
+            onGenerateWeekPlan={handleGenerateWeekPlan}
+          />
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1973,7 +2057,7 @@ export function CalendarClient({
           }
         }}
       >
-        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[85dvh] overflow-y-auto scroll-touch">
           <DialogHeader className="pr-10">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">

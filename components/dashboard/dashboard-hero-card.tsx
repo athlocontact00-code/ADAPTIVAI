@@ -35,13 +35,18 @@ export function DashboardHeroCard({
   checkinSlot,
 }: DashboardHeroCardProps) {
   const PrimaryCta = primaryCta.href ? (
-    <Link href={primaryCta.href}>
-      <Button size="lg" variant={primaryCta.variant || "default"} className="font-medium">
+    <Link href={primaryCta.href} className="w-full sm:w-auto">
+      <Button size="lg" variant={primaryCta.variant || "default"} className="font-medium w-full sm:w-auto">
         {primaryCta.label}
       </Button>
     </Link>
   ) : (
-    <Button size="lg" variant={primaryCta.variant || "default"} onClick={primaryCta.onClick} className="font-medium">
+    <Button
+      size="lg"
+      variant={primaryCta.variant || "default"}
+      onClick={primaryCta.onClick}
+      className="font-medium w-full sm:w-auto"
+    >
       {primaryCta.label}
     </Button>
   );
@@ -78,7 +83,7 @@ export function DashboardHeroCard({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
               {PrimaryCta}
             </div>
 

@@ -126,7 +126,7 @@ export function CoachCommandChips({
           </SheetTrigger>
           <SheetContent
             side="bottom"
-            className="rounded-t-2xl border-t border-border/50 max-h-[85vh] overflow-y-auto safe-area-inset-bottom"
+            className="rounded-t-2xl border-t border-border/50 max-h-[85dvh] overflow-y-auto safe-area-inset-bottom scroll-touch"
           >
             <SheetHeader>
               <SheetTitle className="text-left">Commands</SheetTitle>

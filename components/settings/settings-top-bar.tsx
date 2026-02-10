@@ -27,15 +27,15 @@ export function SettingsTopBar({
   isSaving,
 }: SettingsTopBarProps) {
   return (
-    <header className="sticky top-0 z-10 -mx-4 px-4 py-3 md:-mx-6 md:px-6 bg-background/80 backdrop-blur-md border-b border-white/[0.04]">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <header className="sm:sticky sm:top-0 z-10 -mx-4 px-4 py-2 sm:py-3 md:-mx-6 md:px-6 bg-background/80 backdrop-blur-md border-b border-white/[0.04]">
+      <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
           {description && (
-            <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+            <p className="hidden sm:block mt-0.5 text-sm text-muted-foreground">{description}</p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={status} />
           {onReset && hasChanges && (
             <Button

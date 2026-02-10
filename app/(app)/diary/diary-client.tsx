@@ -358,7 +358,7 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
               </Button>
             </div>
 
-            <div className="p-6 space-y-7 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 space-y-7 max-h-[70dvh] overflow-y-auto scroll-touch">
               {/* Pamiętnik - Main textarea */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Dziennik</label>

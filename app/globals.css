@@ -271,7 +271,8 @@
 /* Scroll containers: allow vertical scroll, don't block with touch */
 .scroll-touch {
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  /* Allow both directions (needed for horizontal tabs on iOS Safari) */
+  touch-action: pan-x pan-y;
 }
 
 /* UX sanity: prevent horizontal overscroll/bounce; keep vertical for pull-to-refresh where applicable */

@@ -714,7 +714,23 @@ export default function SettingsPage() {
         />
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-6">
-          <TabsList className="sticky top-14 sm:top-[72px] z-[9] mb-6 flex h-auto w-full justify-start gap-1 rounded-[14px] border border-white/[0.06] bg-card/30 p-1 backdrop-blur-sm overflow-x-auto overflow-y-hidden -mx-1 px-1 scroll-touch [scrollbar-width:thin]">
+          {/* MOBILE: Section selector (Billing always reachable) */}
+          <div className="sm:hidden mb-4">
+            <div className="text-xs text-muted-foreground">Section</div>
+            <Select value={activeTab} onValueChange={handleTabChange}>
+              <SelectTrigger className={cn(INPUT_CLASS, "mt-2")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="profile">{t("profile")}</SelectItem>
+                <SelectItem value="zones">{t("heartRateZones")}</SelectItem>
+                <SelectItem value="ai">{t("aiSettings")}</SelectItem>
+                <SelectItem value="billing">{t("billing")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <TabsList className="hidden sm:flex sm:sticky sm:top-[72px] z-[9] mb-6 h-auto w-full justify-start gap-1 rounded-[14px] border border-white/[0.06] bg-card/30 p-1 backdrop-blur-sm overflow-x-auto overflow-y-hidden -mx-1 px-1 scroll-touch [scrollbar-width:thin]">
             <TabsTrigger
               value="profile"
               className="flex items-center gap-2 rounded-[10px] px-3 sm:px-4 py-2 data-[state=active]:bg-white/10 shrink-0"

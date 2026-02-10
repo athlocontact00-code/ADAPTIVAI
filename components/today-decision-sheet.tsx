@@ -121,7 +121,7 @@ export function TodayDecisionSheet({ open, onOpenChange }: TodayDecisionSheetPro
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto safe-area-inset-bottom scroll-touch">
         <SheetHeader>
           <SheetTitle>What should I do today?</SheetTitle>
         </SheetHeader>

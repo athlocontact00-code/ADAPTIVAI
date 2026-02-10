@@ -137,8 +137,8 @@ export function ConflictReviewDrawer({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent side="right" className="w-full sm:max-w-[400px] p-0">
-        <SheetHeader className="p-5 pb-4 border-b border-border/50">
+      <SheetContent side="right" className="w-full sm:max-w-[400px] p-0 flex flex-col max-h-[100dvh] safe-area-inset-bottom">
+        <SheetHeader className="p-5 pb-4 border-b border-border/50 shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base font-semibold">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
             Coach Suggestion
@@ -160,7 +160,7 @@ export function ConflictReviewDrawer({
             </p>
           </div>
         ) : (
-          <div className="p-5 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-touch p-5 space-y-5">
             {/* Readiness context */}
             <div className="rounded-control bg-amber-500/5 border border-amber-500/20 p-4">
               <div className="flex items-center justify-between mb-2">
@@ -250,7 +250,7 @@ export function ConflictReviewDrawer({
 
         {/* Footer */}
         {!success && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border/50 bg-card space-y-2">
+          <div className="shrink-0 p-4 border-t border-border/50 bg-card space-y-2 safe-area-inset-bottom">
             <div className="flex gap-2">
               <Button
                 variant="outline"

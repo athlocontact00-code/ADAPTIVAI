@@ -1158,7 +1158,7 @@ export function ProgressClient({
 
       {/* Report Detail Dialog */}
       <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80dvh] overflow-y-auto scroll-touch">
           <DialogHeader>
             <DialogTitle>{selectedReport?.title}</DialogTitle>
           </DialogHeader>
