@@ -8,7 +8,7 @@ import { I18nProvider } from "@/components/i18n-provider";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#0B0B0F",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon.png", sizes: "32x32", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/icons/icon-180.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     type: "website",

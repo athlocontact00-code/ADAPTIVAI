@@ -22,6 +22,7 @@
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset --force",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
+    "generate:icons": "node scripts/generate-icons.mjs",
     "cap:add": "npx cap add",
     "cap:sync": "npx cap sync",
     "cap:open:ios": "npx cap open ios",

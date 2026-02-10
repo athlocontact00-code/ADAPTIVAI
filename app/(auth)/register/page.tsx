@@ -52,10 +52,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex items-center gap-2">
-              <Logo size={36} />
-              <span className="text-2xl font-bold">AdaptivAI</span>
-            </div>
+            <Logo variant="lockup" size={36} className="h-9" />
           </div>
           <CardTitle>{t("createAccountTitle")}</CardTitle>
           <CardDescription>{t("createAccountDesc")}</CardDescription>

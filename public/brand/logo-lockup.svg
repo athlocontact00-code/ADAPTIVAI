@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" fill="none" aria-hidden="true">
+  <!-- Safe area: horizontal padding in use. Mark (40px) + gap + wordmark -->
+  <g fill="currentColor">
+    <path fill-rule="evenodd" d="M20 10 L38 42 L35 42 L35 30 L5 30 L5 42 L2 42 Z M20 15 L14 30 L26 30 Z"/>
+  </g>
+  <text x="52" y="32" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22" font-weight="600" fill="currentColor" letter-spacing="0.02em">AdaptivAI</text>
+</svg>

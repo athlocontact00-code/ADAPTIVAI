@@ -51,10 +51,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex items-center gap-2">
-              <Logo size={36} />
-              <span className="text-2xl font-bold">AdaptivAI</span>
-            </div>
+            <Logo variant="lockup" size={36} className="h-9" />
           </div>
           <CardTitle>{t("welcomeBackTitle")}</CardTitle>
           <CardDescription>{t("signInDesc")}</CardDescription>
@@ -66,7 +63,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder={t("emailPlaceholder")}
+                 placeholder={t("emailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

@@ -157,8 +157,7 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
         style={{ willChange: "transform" }}
       >
         <div className="flex h-16 items-center gap-2 px-6 border-b shrink-0 safe-area-top">
-          <Logo size={28} />
-          <span className="text-xl font-bold">AdaptivAI</span>
+          <Logo variant="lockup" size={24} className="h-6" />
           <button
             className="ml-auto lg:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -220,8 +219,11 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
           >
             <Menu className="h-4 w-4" />
           </button>
-          <Link href="/dashboard" className="lg:hidden flex items-center justify-center shrink-0 rounded-lg p-1 -m-1 hover:bg-accent/50 transition-colors no-underline" aria-label="AdaptivAI Home">
-            <Logo size={28} className="h-7 w-7 shrink-0 object-contain" />
+          <Link href="/dashboard" className="lg:hidden flex items-center shrink-0" aria-label="AdaptivAI">
+            <Logo variant="mark" size={24} className="h-6 w-6" />
+          </Link>
+          <Link href="/dashboard" className="hidden lg:flex items-center shrink-0" aria-label="AdaptivAI">
+            <Logo variant="lockup" size={22} className="h-[22px]" />
           </Link>
           <div className="flex-1 min-w-0" />
 

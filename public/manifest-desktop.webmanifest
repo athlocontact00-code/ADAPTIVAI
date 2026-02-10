@@ -7,8 +7,8 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "window-controls-overlay"],
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "background_color": "#0B0B0F",
+  "theme_color": "#0B0B0F",
   "orientation": "any",
   "categories": ["health", "fitness", "sports", "productivity"],
   "icons": [

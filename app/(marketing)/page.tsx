@@ -79,8 +79,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl safe-area-top">
         <div className={cn("mx-auto flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6", MAX_CONTENT)}>
           <Link href="/" className="flex items-center gap-2.5">
-            <Logo size={28} />
-            <span className="text-xl font-semibold tracking-tight">AdaptivAI</span>
+            <Logo variant="lockup" size={28} className="h-7" />
           </Link>
           <nav className="flex items-center gap-2 sm:gap-4">
             <Link href="/login">
