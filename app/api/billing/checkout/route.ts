@@ -23,6 +23,27 @@ const bodySchema = z
   })
   .optional();
 
+type StripeErrorLike = {
+  message: string;
+  type?: string;
+  code?: string;
+  statusCode?: number;
+  requestId?: string;
+};
+
+function toStripeErrorLike(error: unknown): StripeErrorLike | null {
+  if (!error || typeof error !== "object") return null;
+  const e = error as Record<string, unknown>;
+  if (typeof e.message !== "string") return null;
+  return {
+    message: e.message,
+    type: typeof e.type === "string" ? e.type : undefined,
+    code: typeof e.code === "string" ? e.code : undefined,
+    statusCode: typeof e.statusCode === "number" ? e.statusCode : undefined,
+    requestId: typeof e.requestId === "string" ? e.requestId : undefined,
+  };
+}
+
 function getCheckoutEnv(): {
   PRO_PRICE_ID_MONTHLY?: string;
   PRO_PRICE_ID_YEARLY?: string;
@@ -48,7 +69,7 @@ function getStripeKeyMode(): "test" | "live" {
   return key.startsWith("sk_test_") ? "test" : "live";
 }
 
-function errorToResponse(error: unknown): NextResponse {
+function errorToResponse(error: unknown, requestId: string): NextResponse {
   const message = error instanceof Error ? error.message : String(error);
 
   if (
@@ -58,21 +79,42 @@ function errorToResponse(error: unknown): NextResponse {
     message.includes("Monthly plan is using the yearly price") ||
     message.includes("Invalid priceId")
   ) {
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, requestId }, { status: 400 });
   }
 
   if (message.includes("Missing STRIPE_SECRET_KEY")) {
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, requestId }, { status: 500 });
   }
 
-  return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  const stripeErr = toStripeErrorLike(error);
+  if (stripeErr?.type?.startsWith("Stripe")) {
+    const status =
+      typeof stripeErr.statusCode === "number" && stripeErr.statusCode >= 400 && stripeErr.statusCode < 500
+        ? 400
+        : 500;
+    return NextResponse.json(
+      {
+        error: stripeErr.message,
+        requestId,
+        stripe: {
+          type: stripeErr.type,
+          code: stripeErr.code,
+          requestId: stripeErr.requestId,
+        },
+      },
+      { status }
+    );
+  }
+
+  return NextResponse.json({ error: "Something went wrong", requestId }, { status: 500 });
 }
 
 export async function POST(req: Request) {
+  const requestId = createRequestId();
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized", requestId }, { status: 401 });
     }
 
     const user = await db.user.findUnique({
@@ -81,7 +123,7 @@ export async function POST(req: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized", requestId }, { status: 401 });
     }
 
     const ent = await getEntitlements(user.id);
@@ -99,15 +141,17 @@ export async function POST(req: Request) {
             error: "You already have an active subscription. Open billing portal to manage it.",
             code: "ALREADY_SUBSCRIBED",
             portalUrl: portalSession.url,
+            requestId,
           },
           { status: 409 }
         );
       } catch (portalErr) {
-        logError("billing.checkout.portal_error", { requestId: createRequestId() }, portalErr instanceof Error ? portalErr : undefined);
+        logError("billing.checkout.portal_error", { requestId }, portalErr instanceof Error ? portalErr : undefined);
         return NextResponse.json(
           {
             error: "You already have an active subscription. Open billing portal from Settings to manage it.",
             code: "ALREADY_SUBSCRIBED",
+            requestId,
           },
           { status: 409 }
         );
@@ -123,12 +167,11 @@ export async function POST(req: Request) {
       priceId = getPriceIdForPlan(plan);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      logError("billing.checkout.price_config", { requestId: createRequestId(), plan, normalizedPlan }, e instanceof Error ? e : undefined);
-      return NextResponse.json({ error: msg, plan, normalizedPlan }, { status: 400 });
+      logError("billing.checkout.price_config", { requestId, plan, normalizedPlan }, e instanceof Error ? e : undefined);
+      return NextResponse.json({ error: msg, plan, normalizedPlan, requestId }, { status: 400 });
     }
 
     if (!priceId || !priceId.startsWith("price_")) {
-      const requestId = createRequestId();
       logError("billing.checkout.invalid_price_id", {
         requestId,
         plan,
@@ -142,6 +185,7 @@ export async function POST(req: Request) {
           plan,
           normalizedPlan,
           priceId: priceId ?? null,
+          requestId,
         },
         { status: 500 }
       );
@@ -168,10 +212,98 @@ export async function POST(req: Request) {
       priceId,
       keyMode,
       host,
-      requestId: createRequestId(),
+      requestId,
     });
 
     const stripe = getStripeClient();
+
+    // Preflight validate Stripe price config (recurring interval + key mode). This turns vague 500s into actionable 400s.
+    try {
+      const price = await stripe.prices.retrieve(priceId);
+      const interval = price.recurring?.interval ?? null;
+
+      if (!price.active) {
+        return NextResponse.json(
+          {
+            error: `Stripe Price ${priceId} is inactive. Enable it in Stripe or set a different Price ID.`,
+            plan,
+            normalizedPlan,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (keyMode === "live" && price.livemode === false) {
+        return NextResponse.json(
+          {
+            error:
+              `You're using a TEST price (${priceId}) with a LIVE Stripe key. ` +
+              `Set STRIPE_PRICE_ID_PRO / STRIPE_PRICE_ID_PRO_YEAR (or PRO_PRICE_ID_*) to LIVE price IDs.`,
+            plan,
+            normalizedPlan,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+      if (keyMode === "test" && price.livemode === true) {
+        return NextResponse.json(
+          {
+            error:
+              `You're using a LIVE price (${priceId}) with a TEST Stripe key. ` +
+              `Set STRIPE_PRICE_ID_PRO / STRIPE_PRICE_ID_PRO_YEAR (or PRO_PRICE_ID_*) to TEST price IDs.`,
+            plan,
+            normalizedPlan,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!interval) {
+        return NextResponse.json(
+          {
+            error:
+              `Stripe Price ${priceId} is not recurring. Create a recurring subscription price in Stripe (interval: ${plan === "year" ? "year" : "month"}).`,
+            plan,
+            normalizedPlan,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+      if (plan === "month" && interval !== "month") {
+        return NextResponse.json(
+          {
+            error:
+              `Monthly plan requires a price with interval=month, but Stripe Price ${priceId} has interval=${interval}. ` +
+              `Set STRIPE_PRICE_ID_PRO / PRO_PRICE_ID_MONTHLY to the monthly recurring price ID.`,
+            plan,
+            normalizedPlan,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+      if (plan === "year" && interval !== "year") {
+        return NextResponse.json(
+          {
+            error:
+              `Yearly plan requires a price with interval=year, but Stripe Price ${priceId} has interval=${interval}. ` +
+              `Set STRIPE_PRICE_ID_PRO_YEAR / PRO_PRICE_ID_YEARLY to the yearly recurring price ID.`,
+            plan,
+            normalizedPlan,
+            requestId,
+          },
+          { status: 400 }
+        );
+      }
+    } catch (e) {
+      logError("billing.checkout.price_retrieve_error", { requestId, plan, normalizedPlan, priceId, keyMode }, e instanceof Error ? e : undefined);
+      return errorToResponse(e, requestId);
+    }
+
     const stripeCustomerId = await ensureStripeCustomerForUser(user.id);
 
     const appUrl = getAppUrl();
@@ -206,7 +338,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: checkout.url });
   } catch (error) {
-    logError("billing.checkout.error", { requestId: createRequestId() }, error instanceof Error ? error : undefined);
-    return errorToResponse(error);
+    logError("billing.checkout.error", { requestId }, error instanceof Error ? error : undefined);
+    return errorToResponse(error, requestId);
   }
 }
