@@ -102,7 +102,7 @@ export function CoachCommandChips({
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2 min-w-0">
       {primary.map((chip) => (
         <ChipButton
           key={chip.label}

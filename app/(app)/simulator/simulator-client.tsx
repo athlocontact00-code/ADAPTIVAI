@@ -304,31 +304,32 @@ export function SimulatorClient({ scenarios, baseline }: SimulatorClientProps) {
     : 0;
 
   return (
-    <div className="page-container space-y-6">
+    <div className="page-container space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <FlaskConical className="h-5 w-5 text-primary" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <FlaskConical className="h-4 w-4 text-primary" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">What-If Simulator</h1>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">What-If Simulator</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               Explore training scenarios without affecting real data
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 shrink-0">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setCompareMode(!compareMode)}
-            className={compareMode ? "bg-primary/10" : ""}
+            className={cn(compareMode ? "bg-primary/10" : "", "min-w-0")}
           >
-            <BarChart3 className="mr-2 h-4 w-4" />
+            <BarChart3 className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Compare
           </Button>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button size="sm" onClick={() => setShowCreateDialog(true)} className="min-w-0">
+            <Plus className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             New Scenario
           </Button>
         </div>

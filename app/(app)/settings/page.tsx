@@ -714,31 +714,31 @@ export default function SettingsPage() {
         />
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-6">
-          <TabsList className="sticky top-[72px] z-[9] mb-6 flex h-auto w-full justify-start gap-1 rounded-[14px] border border-white/[0.06] bg-card/30 p-1 backdrop-blur-sm">
+          <TabsList className="sticky top-14 sm:top-[72px] z-[9] mb-6 flex h-auto w-full justify-start gap-1 rounded-[14px] border border-white/[0.06] bg-card/30 p-1 backdrop-blur-sm overflow-x-auto overflow-y-hidden -mx-1 px-1 scroll-touch [scrollbar-width:thin]">
             <TabsTrigger
               value="profile"
-              className="flex items-center gap-2 rounded-[10px] px-4 py-2 data-[state=active]:bg-white/10"
+              className="flex items-center gap-2 rounded-[10px] px-3 sm:px-4 py-2 data-[state=active]:bg-white/10 shrink-0"
             >
               <User className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{t("profile")}</span>
             </TabsTrigger>
             <TabsTrigger
               value="zones"
-              className="flex items-center gap-2 rounded-[10px] px-4 py-2 data-[state=active]:bg-white/10"
+              className="flex items-center gap-2 rounded-[10px] px-3 sm:px-4 py-2 data-[state=active]:bg-white/10 shrink-0"
             >
               <Heart className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{t("heartRateZones")}</span>
             </TabsTrigger>
             <TabsTrigger
               value="ai"
-              className="flex items-center gap-2 rounded-[10px] px-4 py-2 data-[state=active]:bg-white/10"
+              className="flex items-center gap-2 rounded-[10px] px-3 sm:px-4 py-2 data-[state=active]:bg-white/10 shrink-0"
             >
               <Brain className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{t("aiSettings")}</span>
             </TabsTrigger>
             <TabsTrigger
               value="billing"
-              className="flex items-center gap-2 rounded-[10px] px-4 py-2 data-[state=active]:bg-white/10"
+              className="flex items-center gap-2 rounded-[10px] px-3 sm:px-4 py-2 data-[state=active]:bg-white/10 shrink-0"
             >
               <CreditCard className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{t("billing")}</span>

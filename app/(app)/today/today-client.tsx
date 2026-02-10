@@ -556,21 +556,21 @@ export function TodayClient(props: {
   })();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="type-h1">Today</h1>
+          <h1 className="type-h1 text-xl sm:text-2xl">Today</h1>
           <p className="type-caption">{todayLabel}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <CompactToggle value={compact} onChange={setCompact} />
-          <Button variant="outline" size="sm" onClick={() => router.refresh()}>
-            <RefreshCw className="mr-2 h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => router.refresh()} className="shrink-0">
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Refresh
           </Button>
-          <Link href="/calendar">
-            <Button size="sm">
-              <Calendar className="mr-2 h-4 w-4" />
+          <Link href="/calendar" className="min-w-0 shrink-0">
+            <Button size="sm" className="w-full sm:w-auto">
+              <Calendar className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Calendar
             </Button>
           </Link>
@@ -759,9 +759,9 @@ export function TodayClient(props: {
             ) : null;
 
             return (
-              <div className={cn("flex items-center justify-between gap-3", density === "compact" ? "px-1" : "px-1.5")}>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+              <div className={cn("flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3", density === "compact" ? "px-1" : "px-1.5")}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-medium truncate">{w.title}</div>
                     {statusBadge}
                     {adaptedBadge}
@@ -771,11 +771,11 @@ export function TodayClient(props: {
                   </div>
                 </div>
 
-                <div className={cn("flex items-center gap-2 shrink-0", density === "compact" ? "gap-1.5" : "gap-2")}>
-                  <Link href={`/calendar?workoutId=${encodeURIComponent(w.id)}`}>
-                    <Button variant="outline" size="sm" className={density === "compact" ? "px-2" : undefined}>
-                      <Calendar className="h-4 w-4" />
-                      <span className={cn(density === "compact" ? "hidden" : "inline")}>Open</span>
+                <div className={cn("flex flex-wrap items-center gap-1.5 shrink-0 min-w-0", density === "compact" ? "gap-1" : "gap-2")}>
+                  <Link href={`/calendar?workoutId=${encodeURIComponent(w.id)}`} className="shrink-0">
+                    <Button variant="outline" size="sm" className={cn("h-8", density === "compact" ? "px-2" : "px-2 sm:px-3")}>
+                      <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className={cn(density === "compact" ? "hidden sm:inline" : "inline")}>Open</span>
                     </Button>
                   </Link>
 
@@ -785,15 +785,15 @@ export function TodayClient(props: {
                       variant="outline"
                       size="sm"
                       disabled={startingWorkoutId === w.id}
-                      className={density === "compact" ? "px-2" : undefined}
+                      className={cn("h-8 shrink-0", density === "compact" ? "px-2" : "px-2 sm:px-3")}
                     >
-                      <Play className="h-4 w-4" />
-                      <span className={cn(density === "compact" ? "hidden" : "inline")}>Start</span>
+                      <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className={cn(density === "compact" ? "hidden sm:inline" : "inline")}>Start</span>
                     </Button>
                   ) : null}
 
                   {!w.completed ? (
-                    <div className={density === "compact" ? "scale-[0.98] origin-right" : ""}>
+                    <div className="shrink-0">
                       <WorkoutCompleteFlow
                         workoutId={w.id}
                         workoutTitle={w.title}
@@ -801,9 +801,9 @@ export function TodayClient(props: {
                       />
                     </div>
                   ) : (
-                    <Button variant="outline" size="sm" disabled className={cn("gap-2", density === "compact" ? "px-2" : undefined)}>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      <span className={cn(density === "compact" ? "hidden" : "inline")}>Completed</span>
+                    <Button variant="outline" size="sm" disabled className={cn("h-8 gap-1.5 shrink-0", density === "compact" ? "px-2" : "px-2 sm:px-3")}>
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
+                      <span className={cn(density === "compact" ? "hidden sm:inline" : "inline")}>Completed</span>
                     </Button>
                   )}
                 </div>

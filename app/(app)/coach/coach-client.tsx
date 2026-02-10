@@ -635,22 +635,22 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
         </button>
       </div>
 
-      <CoachCommandCenter pageData={pageData} context={context} onCommand={handleCommand} onRefresh={() => router.refresh()} />
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Chat Panel */}
-        <div className="lg:col-span-2">
-          <Card className="flex flex-col h-[600px]">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+        {/* Main Chat Panel — on mobile show first so chat is visible */}
+        <div className="order-first lg:order-none lg:col-span-2">
+          <Card className="flex flex-col min-h-[320px] h-[50vh] sm:h-[480px] lg:h-[600px]">
             <CardHeader className="border-b">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />
                 Training Assistant
               </CardTitle>
             </CardHeader>
 
-            <div className="border-b border-border/60 p-4 space-y-3 bg-muted/20">
+            <div className="border-b border-border/60 p-3 sm:p-4 space-y-3 bg-muted/20 min-w-0">
               <p className="text-sm font-medium text-foreground">Ask or choose a command</p>
-              <CoachCommandChips value={draft} onChange={setDraft} maxVisible={3} />
+              <div className="min-w-0 overflow-hidden">
+                <CoachCommandChips value={draft} onChange={setDraft} maxVisible={3} />
+              </div>
             </div>
 
             {/* Messages */}
@@ -682,7 +682,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
             {/* Input */}
             <div className="border-t border-border/60 p-4 space-y-3 bg-background">
               <CoachContextToggles value={contextPayload} onChange={setContextPayload} />
-              <label className="flex items-center gap-2 text-sm text-foreground/90 cursor-pointer">
+              <label className="flex items-start sm:items-center gap-2 text-sm text-foreground/90 cursor-pointer min-w-0">
                 <input
                   type="checkbox"
                   checked={context?.coachIncludeResultTemplate !== false}
@@ -691,9 +691,9 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
                     const res = await updateCoachIncludeResultTemplate(checked);
                     if (res.success) router.refresh();
                   }}
-                  className="rounded border-input"
+                  className="rounded border-input shrink-0 mt-0.5 sm:mt-0"
                 />
-                <span>Include result template in workout descriptions</span>
+                <span className="min-w-0">Include result template in workout descriptions</span>
               </label>
               <Textarea
                 value={draft}
@@ -710,8 +710,13 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
           </Card>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4">
+        {/* Command center: on mobile below chat (order-2), on lg full width above (lg:order-first lg:col-span-3) */}
+        <div className="order-2 lg:order-first lg:col-span-3">
+          <CoachCommandCenter pageData={pageData} context={context} onCommand={handleCommand} onRefresh={() => router.refresh()} />
+        </div>
+
+        {/* Chats sidebar */}
+        <div className="order-3 lg:col-span-1 space-y-4">
           <Card className="border-border/50 overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center justify-between">

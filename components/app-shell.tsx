@@ -218,10 +218,10 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
             type="button"
             aria-label="Open menu"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-4 w-4" />
           </button>
-          <Link href="/dashboard" className="lg:hidden flex items-center gap-2 shrink-0" aria-label="AdaptivAI Home">
-            <Logo size={24} className="h-6 w-6 shrink-0 object-contain" />
+          <Link href="/dashboard" className="lg:hidden flex items-center justify-center shrink-0 rounded-lg p-1 -m-1 hover:bg-accent/50 transition-colors no-underline" aria-label="AdaptivAI Home">
+            <Logo size={28} className="h-7 w-7 shrink-0 object-contain" />
           </Link>
           <div className="flex-1 min-w-0" />
 
@@ -238,10 +238,10 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                <Avatar className="h-9 w-9">
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
+                <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                   {user.image && <AvatarImage src={user.image} alt="" />}
-                  <AvatarFallback className="bg-primary text-primary-foreground">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -249,7 +249,7 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <div className="flex items-center gap-2 p-2">
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-8 w-8 shrink-0">
                   {user.image && <AvatarImage src={user.image} alt="" />}
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                     {initials}

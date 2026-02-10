@@ -456,9 +456,9 @@ const CalendarDayCell = memo(({
   return (
     <div
       className={cn(
-        "group relative min-h-[130px] cursor-pointer rounded-card border bg-card/40 p-2 transition-default",
-        "border-subtle hover:border-subtle-hover hover:bg-card/60",
-        !inMonth && "opacity-60",
+        "group relative min-h-[100px] sm:min-h-[120px] cursor-pointer rounded-card border border-border/70 bg-card/80 p-2 transition-default overflow-hidden",
+        "hover:border-border hover:bg-card",
+        !inMonth && "opacity-50",
         isSelected && "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-sm",
         isToday && !isSelected && "ring-1 ring-primary/80"
       )}
@@ -466,9 +466,9 @@ const CalendarDayCell = memo(({
       role="button"
       tabIndex={0}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className={cn("text-xs font-medium tabular-nums", isToday && "text-primary")}>{day.getDate()}</div>
+      <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className={cn("text-sm font-semibold tabular-nums text-foreground shrink-0", isToday && "text-primary")}>{day.getDate()}</div>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <span className={cn("h-2 w-2 rounded-full", readiness.dotClass)} />
             {typeof readinessScore === "number" ? (
@@ -511,9 +511,9 @@ const CalendarDayCell = memo(({
         </DropdownMenu>
       </div>
 
-      <div className="mt-2 space-y-1">
+      <div className="mt-1.5 space-y-1 min-h-0 overflow-hidden">
         {visible.length === 0 ? (
-          <div className="h-6 rounded-sm bg-muted/20 group-hover:bg-muted/30 transition-colors" aria-hidden />
+          <div className="h-5 rounded-sm bg-muted/30 group-hover:bg-muted/40 transition-colors" aria-hidden />
         ) : (
           visible.map((workout) => {
             const Icon = workoutTypes.find((t) => t.value === workout.type)?.icon ?? Activity;
@@ -1708,9 +1708,9 @@ export function CalendarClient({
   }, []);
 
   return (
-    <div className="page-container space-y-6 overflow-x-hidden">
+    <div className="page-container space-y-4 sm:space-y-6 overflow-x-hidden pt-1">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="type-h1">Calendar</h1>
+        <h1 className="type-h1 text-xl sm:text-2xl pt-0.5">Calendar</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -1763,7 +1763,7 @@ export function CalendarClient({
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {grid.days.map((day) => {
               const dayWorkouts = getWorkoutsForDate(day);
               const dayCheckIn = getCheckInForDate(day);
