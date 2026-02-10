@@ -10,6 +10,18 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          '"SF Pro Display"',
+          '"SF Pro Text"',
+          "Segoe UI",
+          "Inter",
+          "system-ui",
+          "sans-serif",
+        ],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -59,15 +71,18 @@ const config: Config = {
         }
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-        card: 'var(--radius-card)',
-        control: 'var(--radius-control)',
-        pill: 'var(--radius-pill)',
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+        xl: "1.25rem",
+        "2xl": "1.5rem",
+        card: "var(--radius-card)",
+        control: "var(--radius-control)",
+        pill: "var(--radius-pill)",
       },
       boxShadow: {
-        card: 'var(--shadow-card)',
+        soft: "var(--shadow-soft)",
+        card: "var(--shadow-card)",
       },
       spacing: {
         '4.5': '1.125rem',

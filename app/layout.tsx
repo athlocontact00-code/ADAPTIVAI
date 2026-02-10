@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
@@ -7,8 +6,6 @@ import { Toaster } from "sonner";
 import { SessionProvider } from "@/components/session-provider";
 import { I18nProvider } from "@/components/i18n-provider";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
-
-const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
@@ -23,7 +20,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: "AdaptivAI - Intelligent Training Platform",
   description: "Your AI-powered training companion for optimized performance",
-  manifest: "/manifest.webmanifest",
+  manifest: "/manifest.webmanifest?v=2",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -69,7 +66,7 @@ export default async function RootLayout({
 
   return (
     <html lang={typeof locale === "string" ? locale : "en"} className="dark" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className="min-h-screen font-sans">
         <SessionProvider>
           <NextIntlClientProvider locale={locale} messages={messages ?? undefined}>
             <I18nProvider serverLocale={locale} serverMessages={messages ?? undefined}>

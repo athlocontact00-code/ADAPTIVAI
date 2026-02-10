@@ -151,9 +151,10 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-card/95 backdrop-blur-xl border-r border-border/50 transform transition-transform duration-300 ease-out lg:translate-x-0 flex flex-col",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{ willChange: "transform" }}
       >
         <div className="flex h-16 items-center gap-2 px-6 border-b shrink-0 safe-area-top">
           <Logo size={28} />
@@ -276,8 +277,8 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
           </DropdownMenu>
         </header>
 
-        {/* Page content: single primary scroll container (no nested scroll traps) */}
-        <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-touch ux-scroll-main p-4 sm:p-6">
+        {/* Page content: single primary scroll container; momentum scroll on iOS */}
+        <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto ux-scroll-main scroll-touch p-4 sm:p-6 md:p-8">
           {children}
         </main>
       </div>
