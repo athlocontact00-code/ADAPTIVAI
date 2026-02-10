@@ -8,10 +8,11 @@ export type CoachCommandChip = {
 };
 
 const DEFAULT_CHIPS: CoachCommandChip[] = [
-  {
-    label: "Generate a workout…",
-    template: "Generate a workout for: [sport] [duration] [intensity]",
-  },
+  { label: "Generate today", template: "Generate today's workout" },
+  { label: "Add swim", template: "Add a swim session to my plan" },
+  { label: "Change tomorrow", template: "Change tomorrow's workout" },
+  { label: "Plan week", template: "Generate a week training plan" },
+  { label: "Strength", template: "Add strength session" },
   {
     label: "Explain today’s workout",
     template: "Explain today’s workout",
@@ -19,10 +20,6 @@ const DEFAULT_CHIPS: CoachCommandChip[] = [
   {
     label: "Adjust my plan…",
     template: "Adjust my plan due to: [fatigue/soreness/time]",
-  },
-  {
-    label: "Focus this week",
-    template: "What should I focus on this week?",
   },
   {
     label: "Summarize last 7 days",

@@ -6,11 +6,15 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { SessionProvider } from "@/components/session-provider";
 import { I18nProvider } from "@/components/i18n-provider";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -48,6 +52,7 @@ export default async function RootLayout({
             <I18nProvider serverLocale={locale} serverMessages={messages ?? undefined}>
               {children}
               <Toaster position="top-right" richColors />
+              <CookieConsentBanner />
             </I18nProvider>
           </NextIntlClientProvider>
         </SessionProvider>

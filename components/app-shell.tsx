@@ -34,6 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LegalFooter } from "@/components/legal-footer";
 
 function AppShellFooterLabels() {
   const t = useTranslations("nav");
@@ -137,34 +138,37 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
     : user.email?.slice(0, 2).toUpperCase() || "U";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/80 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden
         />
       )}
 
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center gap-2 px-6 border-b">
+        <div className="flex h-16 items-center gap-2 px-6 border-b shrink-0 safe-area-top">
           <Activity className="h-6 w-6 text-primary" />
           <span className="text-xl font-bold">AdaptivAI</span>
           <button
             className="ml-auto lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            type="button"
+            aria-label="Close menu"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <nav className="flex flex-col gap-1 p-4">
+        <nav className="flex flex-col gap-1 p-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-touch">
           {navigationSections.map((section, sectionIndex) => (
             <div key={sectionIndex} className={section.title ? "mt-4 first:mt-0" : ""}>
               {section.title && (
@@ -196,16 +200,17 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
+        <div className="shrink-0 p-4 border-t space-y-3 safe-area-inset-bottom">
           <AppShellFooterLabels />
+          <LegalFooter compact />
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="lg:pl-64">
+      {/* Main content: scrollable column */}
+      <div className="lg:pl-64 flex flex-col min-h-screen min-h-[100dvh] w-full">
         {showFinishSetupBanner && <FinishSetupBanner />}
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 safe-area-top shrink-0">
           <button
             className="lg:hidden"
             onClick={() => setSidebarOpen(true)}
@@ -271,8 +276,10 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
           </DropdownMenu>
         </header>
 
-        {/* Page content */}
-        <main className="p-6">{children}</main>
+        {/* Page content: single primary scroll container (no nested scroll traps) */}
+        <main className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-touch ux-scroll-main p-4 sm:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

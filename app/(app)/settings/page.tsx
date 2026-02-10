@@ -672,7 +672,7 @@ export default function SettingsPage() {
 
   return (
     <TooltipProvider>
-      <div className="mx-auto max-w-[1120px] px-4 md:px-6">
+      <div className="page-container max-w-[1120px]">
         <SettingsTopBar
           title={t("title")}
           description={t("description")}
@@ -1668,13 +1668,18 @@ export default function SettingsPage() {
                       {syncingBilling ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh status"}
                     </Button>
                     {planInfo?.name === "Pro" ? (
-                      <Button
-                        onClick={openBillingPortal}
-                        disabled={isOpeningPortal}
-                        className="w-full rounded-[12px]"
-                      >
-                        {isOpeningPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manage subscription"}
-                      </Button>
+                      <>
+                        <Button
+                          onClick={openBillingPortal}
+                          disabled={isOpeningPortal}
+                          className="w-full rounded-[12px]"
+                        >
+                          {isOpeningPortal ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manage subscription"}
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground mt-1.5">
+                          Manage subscription opens the Stripe portal and returns you here when done.
+                        </p>
+                      </>
                     ) : (
                       <>
                         <div className="flex rounded-[10px] border border-white/[0.08] p-0.5 bg-white/[0.02]">

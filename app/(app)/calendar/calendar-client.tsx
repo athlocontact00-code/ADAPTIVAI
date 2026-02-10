@@ -1708,8 +1708,8 @@ export function CalendarClient({
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="page-container space-y-6 overflow-x-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="type-h1">Calendar</h1>
         <div className="flex items-center gap-2">
           <Button
@@ -1753,8 +1753,8 @@ export function CalendarClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-        <div className="space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 min-w-0">
+        <div className="space-y-2 min-w-0">
           <div className="grid grid-cols-7 gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div key={d} className="px-1">

@@ -569,7 +569,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-container space-y-6">
       {/* Burnout Warning Banner */}
       {psychologyData?.burnout && (psychologyData.burnout.status === "MODERATE" || psychologyData.burnout.status === "HIGH") && (
         <Card className={`border-l-4 ${psychologyData.burnout.status === "HIGH" ? "border-l-red-500 bg-red-500/5" : "border-l-yellow-500 bg-yellow-500/5"}`}>

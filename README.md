@@ -108,7 +108,7 @@ Set in Vercel Project Settings > Environment Variables (no values in repo):
 
 - `DATABASE_URL` – Neon pooled/pgbouncer connection string
 - `DIRECT_URL` – Neon direct connection string
-- `NEXTAUTH_URL` – Your Vercel domain (e.g. https://your-app.vercel.app)
+- `NEXTAUTH_URL` – Canonical app URL (e.g. https://www.adaptivai.online)
 - `NEXTAUTH_SECRET` – e.g. `openssl rand -base64 32`
 - `NODE_ENV=production`
 
@@ -153,7 +153,7 @@ Set in Project Settings > Environment Variables:
 |----------|----------|-------|
 | `DATABASE_URL` | ✓ | Neon pooled/pgbouncer |
 | `DIRECT_URL` | ✓ | Neon direct (migrations) |
-| `NEXTAUTH_URL` | ✓ | e.g. https://your-app.vercel.app |
+| `NEXTAUTH_URL` | ✓ | e.g. https://www.adaptivai.online |
 | `NEXTAUTH_SECRET` | ✓ | `openssl rand -base64 32` |
 | `STRIPE_SECRET_KEY` | ✓ | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | ✓ | Webhook signing secret |
@@ -170,7 +170,7 @@ npx prisma migrate deploy
 
 ### Stripe webhook
 
-1. **Endpoint URL**: `https://your-app.vercel.app/api/billing/webhook`
+1. **Endpoint URL**: `https://www.adaptivai.online/api/billing/webhook`
 2. **Required events**: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`
 3. **Signing secret**: Confirm "Signing secret" is set in Stripe Dashboard and matches `STRIPE_WEBHOOK_SECRET`
 
@@ -229,6 +229,21 @@ Install instructions (public, no auth): **[/install](/install)**.
    - iOS: Safari → Share → Add to Home Screen.  
    - Android: Chrome → menu → Install app.
 
+### PWA icon checklist (required files)
+
+| File | Size | Purpose |
+|------|------|---------|
+| `public/icons/icon-192.png` | 192×192 | any |
+| `public/icons/icon-512.png` | 512×512 | any |
+| `public/icons/icon-192-maskable.png` | 192×192 | maskable |
+| `public/icons/icon-512-maskable.png` | 512×512 | maskable |
+| `public/apple-touch-icon.png` | 180×180 | iOS Add to Home Screen |
+| `public/favicon.png` or `favicon.ico` | 32×32 | Browser tab |
+| `public/favicon-16.png` | 16×16 | Optional |
+| `public/favicon-32.png` | 32×32 | Optional |
+
+Manifest: `public/manifest.webmanifest` must reference the above icons with correct `sizes`, `type`: `image/png`, and `purpose`: `any` or `maskable`. Set `theme_color` and `background_color` (e.g. `#0a0a0a` for dark UI). Regenerate all with `npm run pwa:icons`.
+
 ### Odświeżenie ikony PWA po deployu
 
 Po wdrożeniu nowej wersji ikon (np. po `npm run pwa:icons` i deployu) ikona na urządzeniu może się nie zaktualizować z powodu cache. Żeby zobaczyć nową ikonę:
@@ -245,6 +260,7 @@ Po wdrożeniu nowej wersji ikon (np. po `npm run pwa:icons` i deployu) ikona na 
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
 | `npm run ci` | CI gates: lint + typecheck + test + build |
+| `npm run smoke` | Lightweight smoke: typecheck + build (verifies core pages compile) |
 | `npm run test` | Run unit tests (entitlements, subscription mapper, checkout-prices, rate-limit, logger) |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript check (no emit) |
@@ -257,6 +273,36 @@ Po wdrożeniu nowej wersji ikon (np. po `npm run pwa:icons` i deployu) ikona na 
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:reset` | Reset database (delete all data) |
 | `npm run pwa:icons` | Regenerate PWA icons + favicons from `assets/logo.png` or `assets/logo-1024.png` (or create `assets/logo-1024.png` from built-in sygnet). |
+| `npm run cap:sync` | Sync web assets to native iOS/Android (Capacitor). |
+| `npm run cap:open:ios` | Open iOS project in Xcode. |
+| `npm run cap:open:android` | Open Android project in Android Studio. |
+
+See [docs/CAPACITOR_AND_STORE.md](docs/CAPACITOR_AND_STORE.md) for Capacitor setup, production URL, deep links, and store submission checklists.
+
+## Manual QA checklist (web + PWA)
+
+After deploy, run through these checks:
+
+**Web (desktop + mobile viewports)**  
+- [ ] Landing: hero, CTAs, how it works, features, pricing teaser, screenshots, FAQ, final CTA; no horizontal scroll.  
+- [ ] Login / Register flow; redirect to dashboard or onboarding.  
+- [ ] App: Dashboard, Calendar, Coach, Settings, Progress, Simulator — all scroll smoothly; no double scrollbars; no overflow-x.  
+- [ ] Sticky header stays visible; main content scrolls underneath.  
+- [ ] Modals/drawers: open and close; body scroll lock only while open.
+
+**PWA**  
+- [ ] Install prompt (Chrome/Edge); Add to Home Screen (iOS Safari).  
+- [ ] After install: icon and name correct; app opens and loads.  
+- [ ] Safe areas: no content cut off by notch or home bar on iOS.
+
+**Legal & consent**  
+- [ ] Footer links: Privacy, Terms, Cookies, Support, Account deletion — all resolve.  
+- [ ] Cookie banner on first visit; Accept all / Reject non-essential / Customize; choice persists after reload.
+
+**Console**  
+- [ ] No errors on landing and app shell (check DevTools Console).
+
+See [docs/smoke-test.md](docs/smoke-test.md) for a longer smoke list.
 
 ## Project Structure
 
@@ -311,7 +357,7 @@ adaptivai/
 3. Add environment variables (no secrets in repo):
    - `DATABASE_URL` – Neon pooled/pgbouncer connection string
    - `DIRECT_URL` – Neon direct connection string
-   - `NEXTAUTH_URL` – Your Vercel domain (e.g. https://your-app.vercel.app)
+   - `NEXTAUTH_URL` – Canonical app URL (e.g. https://www.adaptivai.online)
    - `NEXTAUTH_SECRET` – e.g. `openssl rand -base64 32`
 
 ### 3. Run Migrations on Production

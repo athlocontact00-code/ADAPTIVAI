@@ -354,7 +354,7 @@ export function DashboardClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-container space-y-6">
       {/* Daily Check-in CTA */}
       <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-transparent to-transparent">
         <CardHeader className="flex flex-row items-center justify-between pb-2">

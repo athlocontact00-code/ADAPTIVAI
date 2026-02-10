@@ -93,8 +93,16 @@
   * {
     @apply border-border;
   }
+  html {
+    height: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
   body {
     @apply bg-background text-foreground antialiased;
+    min-height: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    /* Do NOT use overflow-y: hidden - allows vertical scroll */
   }
 }
 
@@ -216,4 +224,58 @@ html {
 
 body {
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* iOS PWA / notched devices: safe area insets */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-inset-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Scroll containers: allow vertical scroll, don't block with touch */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+/* UX sanity: prevent horizontal overscroll/bounce; keep vertical for pull-to-refresh where applicable */
+.ux-scroll-root {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+/* Single primary scroll container: use on main content area to avoid double scrollbars */
+.ux-scroll-main {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
+  overscroll-behavior-x: none;
+}
+
+/* Consistent page container (dashboard, progress, calendar, coach, settings, simulator) */
+.page-container {
+  width: 100%;
+  max-width: 72rem; /* max-w-6xl */
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .page-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .page-container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
 }
