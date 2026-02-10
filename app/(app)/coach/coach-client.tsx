@@ -25,6 +25,7 @@ import {
 import { applySimplifyWeek, applyRecoveryMicrocycle } from "@/lib/actions/psychology";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { CoachCommandChips, type CoachCommandChip } from "@/components/coach/command-chips";
@@ -33,6 +34,7 @@ import { CoachMessageRenderer } from "@/components/coach/coach-message-renderer"
 import { CoachContextToggles, type CoachContextPayload } from "@/components/coach/coach-context-toggles";
 import { HowItWorksDialog } from "@/components/coach/how-it-works-dialog";
 import { PaywallCard } from "@/components/paywall-card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { sendCoachMessage } from "@/lib/actions/coach-chat";
 import { undoDraftWorkouts, insertWorkoutFromCoachResponse, updateCoachIncludeResultTemplate } from "@/lib/actions/coach-draft";
 import { isSendToCalendarIntent, extractCoachIntent } from "@/lib/utils/coach-intent";
@@ -151,6 +153,7 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatSearch, setChatSearch] = useState("");
+  const [chatsOpen, setChatsOpen] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [contextPayload, setContextPayload] = useState<CoachContextPayload>({
     useCheckInData: true,
@@ -583,6 +586,98 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
 
   return (
     <div className="page-container space-y-4 sm:space-y-6">
+      {/* MOBILE: Chats drawer */}
+      <Sheet open={chatsOpen} onOpenChange={setChatsOpen}>
+        <SheetContent side="left" className="sm:hidden p-0 flex flex-col max-h-[100dvh] safe-area-inset-bottom">
+          <SheetHeader className="p-5 pb-4 border-b border-border/50 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <SheetTitle className="text-base font-semibold">Chats</SheetTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-h-[40px]"
+                onClick={() => {
+                  startNewChat();
+                  setChatsOpen(false);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New chat
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-touch p-5 space-y-3">
+            <Input
+              placeholder="Search chats…"
+              value={chatSearch}
+              onChange={(e) => setChatSearch(e.target.value)}
+              className="h-10 text-sm"
+            />
+
+            {conversations.length === 0 ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {[...conversations]
+                  .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                  .filter((c) => {
+                    if (!chatSearch.trim()) return true;
+                    const q = chatSearch.toLowerCase();
+                    return (c.title || "").toLowerCase().includes(q) || getLastUserPreview(c).toLowerCase().includes(q);
+                  })
+                  .slice(0, 50)
+                  .map((c) => {
+                    const isActive = c.id === activeConversationId;
+                    const updated = new Date(c.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    const preview = getLastUserPreview(c);
+                    const planApplied = c.planApplied ?? false;
+                    const pinned = c.pinned ?? false;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          switchConversation(c.id);
+                          setChatsOpen(false);
+                        }}
+                        className={`w-full text-left rounded-xl border px-3 py-3 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
+                          isActive
+                            ? "border-primary bg-primary/5"
+                            : "border-border/50 hover:bg-muted/50"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-sm font-medium">{c.title || "New chat"}</span>
+                              {planApplied && (
+                                <span title="Plan applied" aria-label="Plan applied">
+                                  <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                                </span>
+                              )}
+                              {pinned && (
+                                <span title="Pinned" aria-label="Pinned">
+                                  <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                </span>
+                              )}
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground mt-0.5">{preview}</div>
+                          </div>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">{updated}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Burnout Warning Banner */}
       {psychologyData?.burnout && (psychologyData.burnout.status === "MODERATE" || psychologyData.burnout.status === "HIGH") && (
         <div className="hidden sm:block">
@@ -654,11 +749,21 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
         {/* Main Chat Panel — on mobile show first so chat is visible */}
         <div className="order-first lg:order-none lg:col-span-2">
           <Card className="flex flex-col min-h-[420px] h-[70dvh] sm:min-h-[320px] sm:h-[480px] lg:h-[600px]">
-            <CardHeader className="border-b">
-              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <CardHeader className="border-b flex flex-row items-center justify-between gap-3">
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2 min-w-0">
                 <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />
-                Training Assistant
+                <span className="truncate">Training Assistant</span>
               </CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="sm:hidden h-9 w-9 text-muted-foreground hover:text-foreground"
+                onClick={() => setChatsOpen(true)}
+                aria-label="Open chats"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
             </CardHeader>
 
             {/* MOBILE: minimal quick prompt + More actions */}

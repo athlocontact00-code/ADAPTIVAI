@@ -60,6 +60,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { EmptyState, MetricCard, SectionHeader } from "@/components/ui-extensions";
 import { formatHours, formatTSS, formatPercent } from "@/lib/utils/format";
 import { cn, formatLocalDateInput } from "@/lib/utils";
@@ -1048,6 +1053,7 @@ const CalendarSidePanel = memo(({
 CalendarSidePanel.displayName = "CalendarSidePanel";
 
 interface CalendarClientProps {
+  userId: string;
   initialWorkouts: Workout[];
   initialCheckIns: Array<{
     id: string;
@@ -1064,6 +1070,7 @@ interface CalendarClientProps {
 }
 
 export function CalendarClient({
+  userId,
   initialWorkouts,
   initialCheckIns,
   initialFeedbackWorkoutIds,
@@ -1090,6 +1097,9 @@ export function CalendarClient({
       : initial;
   });
   const [panelTab, setPanelTab] = useState<"day" | "week" | "month">("week");
+  const mobileViewStorageKey = useMemo(() => `adaptivai.calendar.mobileView.v1.${userId}`, [userId]);
+  const [mobileView, setMobileView] = useState<"day" | "week">("day");
+  const [mobileWeekExpanded, setMobileWeekExpanded] = useState<Record<string, boolean>>({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -1176,6 +1186,23 @@ export function CalendarClient({
     setWorkoutDetailOpen(true);
     setAutoOpenedWorkout(true);
   }, [initialOpenWorkoutId, autoOpenedWorkout, workouts]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(mobileViewStorageKey);
+      if (stored === "week" || stored === "day") setMobileView(stored);
+    } catch {
+      // ignore
+    }
+  }, [mobileViewStorageKey]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(mobileViewStorageKey, mobileView);
+    } catch {
+      // ignore
+    }
+  }, [mobileViewStorageKey, mobileView]);
 
 
   const grid = useMemo(() => getMonthGrid({ monthDate }), [monthDate]);
@@ -1528,6 +1555,34 @@ export function CalendarClient({
     setPanelTab("day");
   }, []);
 
+  const goToDate = useCallback(async (next: Date) => {
+    const d = new Date(next);
+    d.setHours(0, 0, 0, 0);
+
+    const monthChanged = d.getMonth() !== monthDate.getMonth() || d.getFullYear() !== monthDate.getFullYear();
+    if (monthChanged) {
+      await loadMonth(d);
+    }
+
+    setSelectedDate(d);
+    setSelectedWeekStart(getWeekStartForDate(d));
+    setPanelTab("day");
+  }, [monthDate]);
+
+  const goToWeekStart = useCallback(async (nextWeekStart: Date) => {
+    const d = new Date(nextWeekStart);
+    d.setHours(0, 0, 0, 0);
+
+    const monthChanged = d.getMonth() !== monthDate.getMonth() || d.getFullYear() !== monthDate.getFullYear();
+    if (monthChanged) {
+      await loadMonth(d);
+    }
+
+    setSelectedWeekStart(getWeekStartForDate(d));
+    setSelectedDate(d);
+    setPanelTab("week");
+  }, [monthDate]);
+
   const openWorkoutDetail = useCallback((workout: Workout) => {
     setWorkoutDetail(workout);
     setWorkoutDetailOpen(true);
@@ -1728,9 +1783,9 @@ export function CalendarClient({
 
   return (
     <div className="page-container space-y-4 sm:space-y-6 overflow-x-hidden pt-1">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="type-h1 text-xl sm:text-2xl pt-0.5">Calendar</h1>
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -1772,7 +1827,335 @@ export function CalendarClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 min-w-0">
+      {/* MOBILE (<md): practical Day + Week views */}
+      <div className="md:hidden space-y-3">
+        {/* Segmented control: Day / Week */}
+        <div className="flex items-center justify-between gap-3">
+          <div
+            role="tablist"
+            aria-label="Calendar view"
+            className="inline-flex rounded-[14px] border border-border/60 bg-card/40 p-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileView === "day"}
+              className={cn(
+                "min-h-[40px] px-4 rounded-[10px] text-sm font-medium transition-colors",
+                mobileView === "day" ? "bg-white/10 text-foreground" : "text-muted-foreground"
+              )}
+              onClick={() => setMobileView("day")}
+            >
+              Day
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileView === "week"}
+              className={cn(
+                "min-h-[40px] px-4 rounded-[10px] text-sm font-medium transition-colors",
+                mobileView === "week" ? "bg-white/10 text-foreground" : "text-muted-foreground"
+              )}
+              onClick={() => setMobileView("week")}
+            >
+              Week
+            </button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-h-[40px]"
+            onClick={() => goToDate(new Date())}
+          >
+            Today
+          </Button>
+        </div>
+
+        {/* DAY VIEW (default) */}
+        {mobileView === "day" ? (
+          <div className="space-y-3">
+            {/* Header: date + prev/next */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => goToDate(addDays(selectedDate, -1))}
+                aria-label="Previous day"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1 min-w-0 text-center">
+                <div className="text-sm font-semibold tracking-tight truncate">
+                  {selectedDate.toLocaleDateString("en-US", { weekday: "long" })}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => goToDate(addDays(selectedDate, 1))}
+                aria-label="Next day"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Week strip: 7 days */}
+            <div className="flex gap-2 overflow-x-auto scroll-touch pb-1 -mx-1 px-1">
+              {Array.from({ length: 7 }).map((_, i) => {
+                const weekStart = getWeekStartForDate(selectedDate);
+                const d = addDays(weekStart, i);
+                const isSel = isSameDay(d, selectedDate);
+                const isTod = isSameDay(d, new Date());
+                return (
+                  <button
+                    key={d.toISOString()}
+                    type="button"
+                    onClick={() => goToDate(d)}
+                    className={cn(
+                      "shrink-0 w-[52px] rounded-[14px] border px-2 py-2 text-center transition-colors touch-manipulation",
+                      isSel ? "border-primary/50 bg-primary/10" : "border-border/50 bg-card/40",
+                      isTod && !isSel && "border-primary/30"
+                    )}
+                  >
+                    <div className={cn("text-[10px] uppercase tracking-wide", isSel ? "text-primary" : "text-muted-foreground")}>
+                      {d.toLocaleDateString("en-US", { weekday: "short" })}
+                    </div>
+                    <div className={cn("text-sm font-semibold tabular-nums", isSel ? "text-foreground" : "text-foreground/90")}>
+                      {d.getDate()}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Agenda list */}
+            <div className="space-y-2">
+              <SectionHeader
+                title={isSameDay(selectedDate, new Date()) ? "Today" : "Selected day"}
+                subtitle={`${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                density="compact"
+                className="mb-0"
+              />
+
+              {selectedDayWorkouts.length === 0 ? (
+                <Card className="border-border/60 bg-card/70">
+                  <CardContent className="p-4">
+                    <div className="text-sm font-medium">No workouts</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Add a workout or generate a plan in Coach.
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 min-h-[44px]"
+                        onClick={() => openNewWorkout(selectedDate)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add workout
+                      </Button>
+                      <Button
+                        className="flex-1 min-h-[44px]"
+                        onClick={handleGenerateWeekPlan}
+                      >
+                        <Bot className="h-4 w-4 mr-2" />
+                        Ask Coach
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {selectedDayWorkouts
+                    .slice()
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .map((w) => {
+                      const meta = workoutTypes.find((x) => x.value === w.type);
+                      const Icon = meta?.icon ?? Activity;
+                      const status = getWorkoutStatus(w);
+                      const statusMeta =
+                        status === "done"
+                          ? { variant: "success" as const, label: "Done" }
+                          : status === "planned"
+                            ? { variant: "secondary" as const, label: "Planned" }
+                            : status === "missed"
+                              ? { variant: "warning" as const, label: "Missed" }
+                              : { variant: "muted" as const, label: "Skipped" };
+                      const dur = formatDurationShort(w.durationMin ?? null);
+                      const tss = typeof w.tss === "number" && w.tss > 0 ? `${w.tss} TSS` : null;
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => openWorkoutDetail(w)}
+                          className="w-full text-left rounded-card border border-border/60 bg-card/70 hover:bg-card/90 transition-colors px-4 py-3 min-h-[56px] touch-manipulation"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <div className="text-sm font-semibold truncate">{w.title}</div>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                <span className="capitalize">{meta?.label ?? w.type}</span>
+                                {dur ? <span className="tabular-nums">{dur}</span> : null}
+                                {tss ? <span className="tabular-nums">{tss}</span> : null}
+                              </div>
+                            </div>
+                            <Badge variant={statusMeta.variant} className="shrink-0">
+                              {statusMeta.label}
+                            </Badge>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* WEEK VIEW (mobile): stacked days + collapsible */
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => goToWeekStart(addDays(selectedWeekStart, -7))}
+                aria-label="Previous week"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1 min-w-0 text-center">
+                <div className="text-sm font-semibold tracking-tight truncate">
+                  {selectedWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} –{" "}
+                  {addDays(selectedWeekStart, 6).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {selectedWeekStart.toLocaleDateString("en-US", { year: "numeric" })}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => goToWeekStart(addDays(selectedWeekStart, 7))}
+                aria-label="Next week"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {Array.from({ length: 7 }).map((_, i) => {
+                const day = addDays(selectedWeekStart, i);
+                const key = formatLocalDateInput(day);
+                const dayWorkouts = workoutsByDate.get(key) ?? [];
+                const open = mobileWeekExpanded[key] ?? isSameDay(day, new Date());
+                const top = dayWorkouts.slice(0, 3);
+                return (
+                  <Card key={key} className="border-border/60 bg-card/70 overflow-hidden">
+                    <Collapsible
+                      open={open}
+                      onOpenChange={(v: boolean) => setMobileWeekExpanded((prev) => ({ ...prev, [key]: v }))}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 touch-manipulation"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-semibold truncate">
+                                {day.toLocaleDateString("en-US", { weekday: "long" })}
+                              </div>
+                              <div className="text-xs text-muted-foreground tabular-nums">
+                                {day.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground/80">
+                              {dayWorkouts.length === 0
+                                ? "No workouts"
+                                : `${dayWorkouts.length} workout${dayWorkouts.length === 1 ? "" : "s"}`}
+                            </div>
+                            {dayWorkouts.length > 0 ? (
+                              <div className="mt-1 text-xs text-muted-foreground truncate">
+                                {dayWorkouts
+                                  .slice(0, 3)
+                                  .map((w) => w.title)
+                                  .join(" • ")}
+                              </div>
+                            ) : null}
+                          </div>
+                          <ChevronRight
+                            className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-90")}
+                          />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="px-4 pb-4 space-y-2">
+                          {dayWorkouts.length === 0 ? (
+                            <Button
+                              variant="outline"
+                              className="w-full min-h-[44px]"
+                              onClick={() => openNewWorkout(day)}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add workout
+                            </Button>
+                          ) : (
+                            <>
+                              {top.map((w) => {
+                                const meta = workoutTypes.find((x) => x.value === w.type);
+                                const Icon = meta?.icon ?? Activity;
+                                const dur = formatDurationShort(w.durationMin ?? null);
+                                const tss = typeof w.tss === "number" && w.tss > 0 ? `${w.tss} TSS` : null;
+                                return (
+                                  <button
+                                    key={w.id}
+                                    type="button"
+                                    onClick={() => openWorkoutDetail(w)}
+                                    className="w-full text-left rounded-control border border-border/50 bg-card/60 hover:bg-card/80 transition-colors px-3 py-3 min-h-[44px]"
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                      <div className="min-w-0">
+                                        <div className="text-sm font-medium truncate">{w.title}</div>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                          <span className="capitalize">{meta?.label ?? w.type}</span>
+                                          {dur ? <span className="tabular-nums">{dur}</span> : null}
+                                          {tss ? <span className="tabular-nums">{tss}</span> : null}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                              {dayWorkouts.length > 3 ? (
+                                <div className="text-xs text-muted-foreground text-center">
+                                  +{dayWorkouts.length - 3} more
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* DESKTOP/TABLET (md+): month grid + side panel */}
+      <div className="hidden md:grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 min-w-0">
         <div className="space-y-2 min-w-0">
           <div className="grid grid-cols-7 gap-2 text-[11px] uppercase tracking-wider text-foreground/70 sm:text-muted-foreground">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -1812,71 +2195,8 @@ export function CalendarClient({
               );
             })}
           </div>
-
-          {/* MOBILE: Agenda (tap day -> list below) */}
-          <div className="sm:hidden pt-4">
-            <Card className="border-border/60 bg-card/80">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Agenda</CardTitle>
-                <div className="text-xs text-muted-foreground">
-                  {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {selectedDayWorkouts.length === 0 ? (
-                  <div className="rounded-control border border-border/50 bg-muted/10 p-3">
-                    <div className="text-sm font-medium">No workouts</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      Tap another day or add a workout in the calendar.
-                    </div>
-                  </div>
-                ) : (
-                  selectedDayWorkouts.map((w) => {
-                    const meta = workoutTypes.find((t) => t.value === w.type);
-                    const Icon = meta?.icon ?? Activity;
-                    const status = getWorkoutStatus(w);
-                    const statusMeta =
-                      status === "done"
-                        ? { variant: "success" as const, label: "Done" }
-                        : status === "planned"
-                          ? { variant: "secondary" as const, label: "Planned" }
-                          : status === "missed"
-                            ? { variant: "warning" as const, label: "Missed" }
-                            : { variant: "muted" as const, label: "Skipped" };
-                    const dur = typeof w.durationMin === "number" && w.durationMin > 0 ? `${w.durationMin} min` : null;
-                    const tss = typeof w.tss === "number" && w.tss > 0 ? `${w.tss} TSS` : null;
-                    return (
-                      <button
-                        key={w.id}
-                        type="button"
-                        onClick={() => openWorkoutDetail(w)}
-                        className="w-full text-left rounded-control border border-border/50 bg-card/60 hover:bg-card/80 transition-colors px-3 py-3 min-h-[44px]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                              <div className="text-sm font-medium truncate">{w.title}</div>
-                            </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                              <span className="capitalize">{meta?.label ?? w.type}</span>
-                              {dur ? <span className="tabular-nums">{dur}</span> : null}
-                              {tss ? <span className="tabular-nums">{tss}</span> : null}
-                            </div>
-                          </div>
-                          <Badge variant={statusMeta.variant} className="shrink-0">
-                            {statusMeta.label}
-                          </Badge>
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </div>
-        <div className="hidden sm:block">
+        <div className="mt-4 lg:mt-0">
           <CalendarSidePanel
             tab={panelTab}
             onTabChange={setPanelTab}

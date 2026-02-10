@@ -108,6 +108,7 @@ export default async function CalendarPage({
 
   return (
     <CalendarClient
+      userId={session.user.id}
       initialWorkouts={workouts}
       initialCheckIns={checkIns}
       initialFeedbackWorkoutIds={feedbackWorkoutIds}
