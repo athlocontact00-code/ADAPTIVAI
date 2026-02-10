@@ -206,14 +206,6 @@ export async function POST(req: Request) {
       }
       return "";
     })();
-    logInfo("billing.checkout.create", {
-      plan,
-      normalizedPlan,
-      priceId,
-      keyMode,
-      host,
-      requestId,
-    });
 
     const stripe = getStripeClient();
 
@@ -308,10 +300,23 @@ export async function POST(req: Request) {
 
     const appUrl = getAppUrl();
 
+    // Unique idempotency key per request so monthly vs yearly (or retries) never reuse the same key with different params.
     const idempotencyKey =
-      typeof parsedBody?.idempotencyKey === "string" && parsedBody.idempotencyKey.length > 0
-        ? parsedBody.idempotencyKey
-        : `${user.id}:${priceId}:${new Date().toISOString().slice(0, 10)}`;
+      typeof parsedBody?.idempotencyKey === "string" && parsedBody.idempotencyKey.trim().length > 0
+        ? parsedBody.idempotencyKey.trim().slice(0, 255)
+        : createRequestId();
+
+    const interval = plan === "year" ? "year" : "month";
+    const priceTail = priceId.slice(-6);
+    logInfo("billing.checkout.create", {
+      requestId,
+      idemKey: idempotencyKey,
+      interval,
+      priceTail,
+      normalizedPlan,
+      keyMode,
+      host,
+    });
 
     const checkout = await stripe.checkout.sessions.create(
       {
@@ -333,7 +338,7 @@ export async function POST(req: Request) {
           plan: "pro",
         },
       },
-      { idempotencyKey: idempotencyKey.slice(0, 255) }
+      { idempotencyKey }
     );
 
     return NextResponse.json({ url: checkout.url });

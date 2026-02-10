@@ -578,12 +578,18 @@ export default function SettingsPage() {
   }
 
   async function openCheckout() {
+    if (isStartingCheckout) return;
     setIsStartingCheckout(true);
     try {
+      const idempotencyKey =
+        typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined;
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: checkoutPlan }),
+        body: JSON.stringify({
+          plan: checkoutPlan,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        }),
       });
       const data = (await res.json().catch(() => null)) as { url?: string; error?: string; code?: string; portalUrl?: string } | null;
       if (!res.ok) {
