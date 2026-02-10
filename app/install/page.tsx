@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Smartphone, Monitor, Apple, Download } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -40,6 +41,7 @@ export default function InstallPage() {
       <header className="border-b border-border/40 bg-background/95 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
+            <Logo size={28} />
             <span className="text-xl font-bold">AdaptivAI</span>
           </Link>
           <nav className="flex items-center gap-4">

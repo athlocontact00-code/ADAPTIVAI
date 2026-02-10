@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/logo";
 
 export const metadata: Metadata = {
   title: "Account deletion - AdaptivAI",
@@ -11,7 +12,8 @@ export default function AccountDeletePage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/40 px-4 py-4">
-        <Link href="/" className="text-lg font-semibold">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
+          <Logo size={24} />
           AdaptivAI
         </Link>
       </header>

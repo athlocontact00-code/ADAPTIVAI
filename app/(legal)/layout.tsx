@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Activity } from "lucide-react";
 import { LegalFooter } from "@/components/legal-footer";
+import { Logo } from "@/components/logo";
 
 export default function LegalLayout({
   children,
@@ -12,7 +12,7 @@ export default function LegalLayout({
       <header className="border-b border-border/40 bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center">
           <Link href="/" className="flex items-center gap-2 text-foreground hover:opacity-90">
-            <Activity className="h-5 w-5 text-primary" />
+            <Logo size={24} />
             <span className="font-semibold">AdaptivAI</span>
           </Link>
         </div>

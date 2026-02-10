@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Activity, Loader2, ArrowRight, Zap } from "lucide-react";
+import { Loader2, ArrowRight, Zap } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -171,7 +172,7 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/20 p-4 sm:p-6">
       <div className="flex items-center gap-2 mb-6">
-        <Activity className="h-6 w-6 text-primary" />
+        <Logo size={28} />
         <span className="text-xl font-bold">AdaptivAI</span>
       </div>
 

@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Activity, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +52,7 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <div className="flex items-center gap-2">
-              <Activity className="h-8 w-8 text-primary" />
+              <Logo size={36} />
               <span className="text-2xl font-bold">AdaptivAI</span>
             </div>
           </div>

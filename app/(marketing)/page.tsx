@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
-  Activity,
   Zap,
   Calendar,
   BookOpen,
@@ -13,6 +12,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { LegalFooter } from "@/components/legal-footer";
+import { Logo } from "@/components/logo";
 
 const HERO_HEADLINE = "Train smarter. Recover better. Race stronger.";
 const HERO_SUB =
@@ -94,7 +94,7 @@ export default function LandingPage() {
       <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 safe-area-top">
         <div className="container flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
-            <Activity className="h-6 w-6 text-primary" />
+            <Logo size={28} />
             <span className="text-xl font-bold">AdaptivAI</span>
           </Link>
           <nav className="flex items-center gap-2 sm:gap-4">

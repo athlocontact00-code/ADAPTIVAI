@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/logo";
 
 const LEGAL_LINKS = [
   { href: "/privacy", label: "Privacy" },
@@ -34,7 +34,7 @@ export function LegalFooter({
     <footer className={cn("container", className)}>
       <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:items-center">
         <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <Activity className="h-4 w-4 text-primary" />
+          <Logo size={20} />
           <span>AdaptivAI</span>
         </Link>
         <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-muted-foreground">

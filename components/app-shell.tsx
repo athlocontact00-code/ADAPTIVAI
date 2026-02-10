@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import {
-  Activity,
   Calendar,
   BookOpen,
   LayoutDashboard,
@@ -22,6 +21,7 @@ import {
   FlaskConical,
   Sun,
 } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -156,7 +156,7 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
         )}
       >
         <div className="flex h-16 items-center gap-2 px-6 border-b shrink-0 safe-area-top">
-          <Activity className="h-6 w-6 text-primary" />
+          <Logo size={28} />
           <span className="text-xl font-bold">AdaptivAI</span>
           <button
             className="ml-auto lg:hidden"
