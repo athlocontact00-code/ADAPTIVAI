@@ -22,12 +22,17 @@ export function normalizePlan(input: string | undefined): BillingPlan {
   return "month";
 }
 
+function toPriceId(s: string | undefined): string | undefined {
+  const t = typeof s === "string" ? s.trim() : undefined;
+  return t && t.startsWith("price_") ? t : undefined;
+}
+
 function getAllowedPriceIds(env: CheckoutEnv): string[] {
   return [
-    env.PRO_PRICE_ID_MONTHLY,
-    env.PRO_PRICE_ID_YEARLY,
-    env.STRIPE_PRICE_ID_PRO,
-    env.STRIPE_PRICE_ID_PRO_YEAR,
+    toPriceId(env.PRO_PRICE_ID_MONTHLY),
+    toPriceId(env.PRO_PRICE_ID_YEARLY),
+    toPriceId(env.STRIPE_PRICE_ID_PRO),
+    toPriceId(env.STRIPE_PRICE_ID_PRO_YEAR),
   ].filter(Boolean) as string[];
 }
 
@@ -54,24 +59,26 @@ export function getProPriceIdForPlan(
     return explicitPriceId;
   }
 
-  const planId =
-    plan === "year"
-      ? env.STRIPE_PRICE_ID_PRO_YEAR ?? env.PRO_PRICE_ID_YEARLY
-      : env.PRO_PRICE_ID_MONTHLY ?? env.STRIPE_PRICE_ID_PRO;
+  // Same precedence for both: Stripe vars first, then PRO_* (so STRIPE_PRICE_ID_PRO / STRIPE_PRICE_ID_PRO_YEAR are the main ones)
+  const monthlyId = toPriceId(env.STRIPE_PRICE_ID_PRO) ?? toPriceId(env.PRO_PRICE_ID_MONTHLY);
+  const yearlyId = toPriceId(env.STRIPE_PRICE_ID_PRO_YEAR) ?? toPriceId(env.PRO_PRICE_ID_YEARLY);
+
+  const planId = plan === "year" ? yearlyId : monthlyId;
 
   if (!planId) {
     throw new Error(
       plan === "year"
         ? "Missing STRIPE_PRICE_ID_PRO_YEAR (or PRO_PRICE_ID_YEARLY) for yearly plan"
-        : "Missing PRO_PRICE_ID_MONTHLY or STRIPE_PRICE_ID_PRO for monthly plan"
+        : "Missing STRIPE_PRICE_ID_PRO or PRO_PRICE_ID_MONTHLY for monthly plan"
     );
   }
 
-  if (!planId.startsWith("price_")) {
+  // Avoid using the same price for both plans (common misconfiguration)
+  if (plan === "month" && yearlyId && planId === yearlyId) {
     throw new Error(
-      "Stripe Price ID must start with price_ (use a Price ID from Stripe Dashboard, not a Product ID prod_xxx). " +
-        "Use test price IDs with test keys, live price IDs with live keys."
+      "Monthly plan is using the yearly price ID. Set STRIPE_PRICE_ID_PRO or PRO_PRICE_ID_MONTHLY to a monthly Stripe Price (price_xxx)."
     );
   }
+
   return planId;
 }

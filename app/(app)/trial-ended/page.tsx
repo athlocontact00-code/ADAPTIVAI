@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Zap, Sparkles, TrendingUp, Calendar, LogOut, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Logo } from "@/components/logo";
 
 const PRO_BENEFITS = [
   { icon: Sparkles, text: "AI Coach & plan generation" },
@@ -47,6 +48,10 @@ export default function TrialEndedPage() {
 
   return (
     <div className="container max-w-md py-12">
+      <div className="flex items-center gap-2 justify-center mb-8">
+        <Logo size={32} />
+        <span className="text-xl font-bold">AdaptivAI</span>
+      </div>
       <Card className="border-amber-500/30 bg-amber-500/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">

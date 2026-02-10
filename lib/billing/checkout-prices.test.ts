@@ -32,11 +32,11 @@ describe("normalizePlan", () => {
 });
 
 describe("plan -> price mapping", () => {
-  it("monthly plan resolves to monthly price ID", () => {
+  it("monthly plan resolves to monthly price ID (STRIPE_PRICE_ID_PRO first)", () => {
     const plan = normalizePlan("monthly");
     expect(plan).toBe("month");
     const priceId = getProPriceIdForPlan(plan, undefined, env);
-    expect(priceId).toBe("price_monthly");
+    expect(priceId).toBe("price_stripe_monthly");
     expect(priceId.startsWith("price_")).toBe(true);
   });
 
@@ -48,16 +48,16 @@ describe("plan -> price mapping", () => {
     expect(priceId.startsWith("price_")).toBe(true);
   });
 
-  it("normalized month uses PRO_PRICE_ID_MONTHLY then STRIPE_PRICE_ID_PRO", () => {
-    expect(getProPriceIdForPlan(normalizePlan("month"), undefined, env)).toBe("price_monthly");
-    const e = { ...env, PRO_PRICE_ID_MONTHLY: undefined };
-    expect(getProPriceIdForPlan(normalizePlan("month"), undefined, e)).toBe("price_stripe_monthly");
+  it("normalized month uses STRIPE_PRICE_ID_PRO then PRO_PRICE_ID_MONTHLY", () => {
+    expect(getProPriceIdForPlan(normalizePlan("month"), undefined, env)).toBe("price_stripe_monthly");
+    const e = { ...env, STRIPE_PRICE_ID_PRO: undefined };
+    expect(getProPriceIdForPlan(normalizePlan("month"), undefined, e)).toBe("price_monthly");
   });
 });
 
 describe("getProPriceIdForPlan", () => {
-  it("returns monthly price for plan month", () => {
-    expect(getProPriceIdForPlan("month", undefined, env)).toBe("price_monthly");
+  it("returns monthly price for plan month (STRIPE_PRICE_ID_PRO preferred)", () => {
+    expect(getProPriceIdForPlan("month", undefined, env)).toBe("price_stripe_monthly");
   });
 
   it("returns yearly price for plan year", () => {
@@ -77,7 +77,7 @@ describe("getProPriceIdForPlan", () => {
   it("throws when monthly price missing", () => {
     const e = { ...env, PRO_PRICE_ID_MONTHLY: undefined, STRIPE_PRICE_ID_PRO: undefined };
     expect(() => getProPriceIdForPlan("month", undefined, e)).toThrow(
-      /Missing PRO_PRICE_ID_MONTHLY or STRIPE_PRICE_ID_PRO/
+      /Missing STRIPE_PRICE_ID_PRO or PRO_PRICE_ID_MONTHLY/
     );
   });
 
@@ -101,8 +101,13 @@ describe("getProPriceIdForPlan", () => {
     expect(getProPriceIdForPlan("month", "price_123", empty)).toBe("price_123");
   });
 
-  it("throws when resolved id is a Product ID (prod_) not a Price ID (price_)", () => {
+  it("throws when only invalid price IDs (prod_) are set for monthly", () => {
     const e = { PRO_PRICE_ID_MONTHLY: "prod_abc123" };
-    expect(() => getProPriceIdForPlan("month", undefined, e)).toThrow(/must start with price_/);
+    expect(() => getProPriceIdForPlan("month", undefined, e)).toThrow(/Missing STRIPE_PRICE_ID_PRO or PRO_PRICE_ID_MONTHLY/);
+  });
+
+  it("throws when monthly plan would use yearly price ID (misconfiguration)", () => {
+    const e = { STRIPE_PRICE_ID_PRO: "price_same", STRIPE_PRICE_ID_PRO_YEAR: "price_same", PRO_PRICE_ID_MONTHLY: undefined, PRO_PRICE_ID_YEARLY: undefined };
+    expect(() => getProPriceIdForPlan("month", undefined, e)).toThrow(/Monthly plan is using the yearly price/);
   });
 });

@@ -56,7 +56,10 @@ export default function InstallPage() {
       </header>
 
       <main className="container py-12 max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold tracking-tight mb-2">Install AdaptivAI</h1>
+        <div className="flex items-center gap-2 mb-2">
+          <Logo size={32} />
+          <h1 className="text-2xl font-bold tracking-tight">Install AdaptivAI</h1>
+        </div>
         <p className="text-muted-foreground mb-8">
           Add AdaptivAI to your home screen or install it as an app for quick access.
         </p>

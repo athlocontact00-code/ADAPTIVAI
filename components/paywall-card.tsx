@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Zap, Sparkles, TrendingUp, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Logo } from "@/components/logo";
 
 interface PaywallCardProps {
   title?: string;
@@ -31,6 +32,7 @@ export function PaywallCard({
     <Card className="border-amber-500/30 bg-amber-500/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
+          <Logo size={22} className="shrink-0" />
           <Zap className="h-5 w-5 text-amber-500" />
           {title}
         </CardTitle>

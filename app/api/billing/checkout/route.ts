@@ -55,6 +55,7 @@ function errorToResponse(error: unknown): NextResponse {
     message.includes("Missing PRO_PRICE_ID_MONTHLY") ||
     message.includes("Missing STRIPE_PRICE_ID_PRO") ||
     message.includes("Missing STRIPE_PRICE_ID_PRO_YEAR") ||
+    message.includes("Monthly plan is using the yearly price") ||
     message.includes("Invalid priceId")
   ) {
     return NextResponse.json({ error: message }, { status: 400 });
