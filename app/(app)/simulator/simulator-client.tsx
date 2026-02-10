@@ -45,6 +45,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { cn } from "@/lib/utils";
 import {
   createScenario,
   deleteScenario,
