@@ -3,6 +3,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
+import { createSign } from "node:crypto";
 import { compare } from "bcryptjs";
 import { db } from "./db";
 import { z } from "zod";
@@ -25,6 +26,55 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+function base64url(input: Buffer | string): string {
+  const buf = typeof input === "string" ? Buffer.from(input, "utf8") : input;
+  return buf
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function createAppleClientSecret(params: {
+  clientId: string;
+  teamId: string;
+  keyId: string;
+  privateKey: string;
+}): string {
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + 60 * 60 * 24 * 180; // 180 days (<= 6 months)
+
+  const header = { alg: "ES256", kid: params.keyId, typ: "JWT" };
+  const payload = {
+    iss: params.teamId,
+    iat,
+    exp,
+    aud: "https://appleid.apple.com",
+    sub: params.clientId,
+  };
+
+  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
+  const signer = createSign("SHA256");
+  signer.update(signingInput);
+  signer.end();
+  const signature = signer.sign({ key: params.privateKey, dsaEncoding: "ieee-p1363" });
+  return `${signingInput}.${base64url(signature)}`;
+}
+
+const appleClientSecret =
+  process.env.APPLE_CLIENT_SECRET ??
+  (process.env.APPLE_CLIENT_ID &&
+  process.env.APPLE_TEAM_ID &&
+  process.env.APPLE_KEY_ID &&
+  process.env.APPLE_PRIVATE_KEY
+    ? createAppleClientSecret({
+        clientId: process.env.APPLE_CLIENT_ID,
+        teamId: process.env.APPLE_TEAM_ID,
+        keyId: process.env.APPLE_KEY_ID,
+        privateKey: process.env.APPLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      })
+    : undefined);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(db),
   providers: [
@@ -37,11 +87,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }),
         ]
       : []),
-    ...(process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET
+    ...(process.env.APPLE_CLIENT_ID && appleClientSecret
       ? [
           Apple({
             clientId: process.env.APPLE_CLIENT_ID,
-            clientSecret: process.env.APPLE_CLIENT_SECRET,
+            clientSecret: appleClientSecret,
             allowDangerousEmailAccountLinking: true,
           }),
         ]
