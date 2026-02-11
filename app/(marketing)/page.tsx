@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { LegalFooter } from "@/components/legal-footer";
 import { Logo } from "@/components/logo";
-import { ProductPreview } from "@/components/ProductPreview";
 import { cn } from "@/lib/utils";
 
 const HERO_HEADLINE = "Train smarter. Recover better. Race stronger.";
@@ -144,10 +143,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 3. Product preview */}
-        <ProductPreview />
-
-        {/* 4. How it works */}
+        {/* 3. How it works */}
         <section id="how-it-works" className="px-4 sm:px-6 py-20 sm:py-28 border-t border-border/40">
           <div className={cn("mx-auto", MAX_CONTENT)}>
             <h2 className="text-2xl sm:text-3xl font-bold text-center mb-12">How it works</h2>
@@ -165,7 +161,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 5. Pricing teaser */}
+        {/* 4. Pricing teaser */}
         <section className="px-4 sm:px-6 py-20 sm:py-28 border-t border-border/40">
           <div className={cn("mx-auto max-w-2xl text-center", MAX_CONTENT)}>
             <h2 className="text-2xl sm:text-3xl font-bold mb-4">Simple pricing</h2>
@@ -185,7 +181,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 6. FAQ */}
+        {/* 5. FAQ */}
         <section className="px-4 sm:px-6 py-20 sm:py-28 border-t border-border/40">
           <div className={cn("mx-auto", MAX_CONTENT)}>
             <h2 className="text-2xl sm:text-3xl font-bold text-center mb-12">FAQ</h2>
@@ -200,7 +196,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 7. Final CTA */}
+        {/* 6. Final CTA */}
         <section className="border-t border-border/40 bg-muted/20 py-20 sm:py-28">
           <div className={cn("mx-auto px-4 sm:px-6 text-center", MAX_CONTENT)}>
             <h2 className="text-2xl sm:text-3xl font-bold">Start free</h2>
