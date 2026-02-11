@@ -21,6 +21,7 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset --force",
+    "images:build": "node scripts/process-images.mjs",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
     "generate:icons": "node scripts/generate-icons.mjs",
     "cap:add": "npx cap add",
