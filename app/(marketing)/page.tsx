@@ -3,15 +3,14 @@ import { Button } from "@/components/ui/button";
 import {
   Zap,
   Calendar,
-  BookOpen,
   TrendingUp,
   Bot,
   ClipboardCheck,
   ChevronDown,
-  Smartphone,
 } from "lucide-react";
 import { LegalFooter } from "@/components/legal-footer";
 import { Logo } from "@/components/logo";
+import { ProductPreview } from "@/components/ProductPreview";
 import { cn } from "@/lib/utils";
 
 const HERO_HEADLINE = "Train smarter. Recover better. Race stronger.";
@@ -145,26 +144,8 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 3. Screenshots / UI preview */}
-        <section className="px-4 sm:px-6 py-20 sm:py-28 border-t border-border/40">
-          <div className={cn("mx-auto", MAX_CONTENT)}>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4">See it in action</h2>
-            <p className="text-muted-foreground text-center mb-12">Dashboard, calendar, and AI Coach.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {["Dashboard", "Calendar", "AI Coach"].map((label) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-border/50 bg-card/40 aspect-[4/3] flex items-center justify-center shadow-soft"
-                >
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <Smartphone className="h-10 w-10 opacity-60" />
-                    <span className="text-sm font-medium">{label}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* 3. Product preview */}
+        <ProductPreview />
 
         {/* 4. How it works */}
         <section id="how-it-works" className="px-4 sm:px-6 py-20 sm:py-28 border-t border-border/40">
