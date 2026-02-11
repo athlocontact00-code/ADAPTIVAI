@@ -1,8 +1,24 @@
 import NextAuth from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { db } from "./db";
 import { z } from "zod";
+
+function parseTrialDays(): number {
+  const raw = process.env.TRIAL_DAYS ?? process.env.BILLING_TRIAL_DAYS;
+  if (!raw) return 14;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 14;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -10,7 +26,26 @@ const loginSchema = z.object({
 });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  adapter: PrismaAdapter(db),
   providers: [
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
+    ...(process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET
+      ? [
+          Apple({
+            clientId: process.env.APPLE_CLIENT_ID,
+            clientSecret: process.env.APPLE_CLIENT_SECRET,
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
     Credentials({
       name: "credentials",
       credentials: {
@@ -29,7 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { email: email.toLowerCase() },
         });
 
-        if (!user) {
+        if (!user || !user.passwordHash) {
           return null;
         }
 
@@ -47,6 +82,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
+  events: {
+    async createUser({ user }) {
+      // Ensure OAuth-created users get the same trial fields as email/password signups.
+      const now = new Date();
+      const trialEndsAt = addDays(now, parseTrialDays());
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          trialStartedAt: now,
+          trialEndsAt,
+        },
+      });
+    },
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
