@@ -251,12 +251,12 @@ export default function RegisterPage() {
               </div>
 
               <div className="relative p-7 sm:p-8 h-full flex flex-col">
-                <p className="text-xs uppercase tracking-[0.18em] text-white/60">Beta</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-white/60">Early access</p>
                 <h2 className="mt-3 text-2xl font-semibold tracking-tight text-balance text-white">
                   Start in under a minute.
                 </h2>
                 <p className="mt-3 text-sm text-white/70 max-w-md">
-                  Join the beta and get the adaptive planning loop from day one.
+                  Get early access and start the adaptive planning loop from day one.
                 </p>
 
                 <div className="mt-7 space-y-3">

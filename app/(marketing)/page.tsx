@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { LegalFooter } from "@/components/legal-footer";
 import { Logo } from "@/components/logo";
 import { Reveal } from "@/components/marketing/reveal";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { cn } from "@/lib/utils";
 
 const MAX_CONTENT = "max-w-[1200px]";
@@ -58,11 +59,36 @@ const FEATURES = [
 ];
 
 const SCREEN_SLOTS = [
-  { title: "Daily check‑in", caption: "Zmęczenie • sen • stres • czas" },
-  { title: "Plan na dziś", caption: "Trening + alternatywy + „dlaczego”" },
-  { title: "Tydzień", caption: "Obciążenie • akcenty • regeneracja" },
-  { title: "Insights", caption: "Trendy + krótka narracja" },
-  { title: "Coach", caption: "Zapytaj i przeplanuj w 1 rozmowie" },
+  {
+    title: "Daily check‑in",
+    caption: "Zmęczenie • sen • stres • czas",
+    device: "iphone",
+    imageSrc: "/stock/processed/swimmer-underwater-pool-01-section.webp",
+  },
+  {
+    title: "Plan na dziś",
+    caption: "Trening + alternatywy + „dlaczego”",
+    device: "iphone",
+    imageSrc: "/stock/processed/runner-silhouette-sunset-01-section.webp",
+  },
+  {
+    title: "Tydzień",
+    caption: "Obciążenie • akcenty • regeneracja",
+    device: "macbook",
+    imageSrc: "/stock/processed/cyclist-road-sunset-01-section.webp",
+  },
+  {
+    title: "Insights",
+    caption: "Trendy + krótka narracja",
+    device: "macbook",
+    imageSrc: "/stock/processed/abstract-dark-texture-01-section.webp",
+  },
+  {
+    title: "Coach",
+    caption: "Zapytaj i przeplanuj w 1 rozmowie",
+    device: "iphone",
+    imageSrc: "/stock/processed/abstract-warm-bokeh-01-section.webp",
+  },
 ];
 
 const QUOTES = [
@@ -72,11 +98,11 @@ const QUOTES = [
       "W końcu plan, który nie wywraca się, gdy mam gorszy dzień. Lubię wersje alternatywne.",
   },
   {
-    name: "Triathlete (beta)",
+    name: "Triathlete",
     quote: "Najlepsze jest „dlaczego” — wiem po co robię akcent i jak go wykonać.",
   },
   {
-    name: "Runner (beta)",
+    name: "Runner",
     quote: "Check‑in trwa chwilę, a rekomendacja jest zaskakująco trafna. Zero przeładowania.",
   },
 ];
@@ -108,7 +134,7 @@ const FAQ = [
   },
   {
     q: "Czy mogę anulować w dowolnym momencie?",
-    a: "Tak. W becie dostęp jest bezpłatny. Pro pojawi się później — z możliwością rezygnacji w każdej chwili.",
+    a: "Tak. W early access dostęp jest bezpłatny. Pro pojawi się później — z możliwością rezygnacji w każdej chwili.",
   },
   {
     q: "Czy to zastąpi trenera?",
@@ -118,6 +144,65 @@ const FAQ = [
 
 function Container({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("mx-auto px-4 sm:px-6", MAX_CONTENT, className)}>{children}</div>;
+}
+
+function MacbookMockup({
+  screenSrc,
+  sizes,
+  className,
+}: {
+  screenSrc: string;
+  sizes: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative", className)}>
+      {/* Screen content (positioned inside display area) */}
+      <div className="absolute left-[7.5%] top-[7.5%] h-[78%] w-[85%] overflow-hidden rounded-2xl border border-white/10">
+        <Image src={screenSrc} alt="" aria-hidden fill sizes={sizes} className="object-cover opacity-95" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
+        <div className="absolute inset-0 opacity-70 [background:radial-gradient(520px_circle_at_20%_0%,rgba(255,122,24,.18),transparent_55%),radial-gradient(620px_circle_at_80%_10%,rgba(168,85,247,.14),transparent_60%)]" />
+      </div>
+
+      <Image
+        src="/mockups/processed/macbook.webp"
+        alt="MacBook mockup"
+        width={738}
+        height={454}
+        sizes={sizes}
+        className="h-auto w-full drop-shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+      />
+    </div>
+  );
+}
+
+function IphoneMockup({
+  screenSrc,
+  sizes,
+  className,
+}: {
+  screenSrc: string;
+  sizes: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative", className)}>
+      {/* Screen content (behind frame; frame has transparent interior) */}
+      <div className="absolute inset-[4.5%] overflow-hidden rounded-[2.45rem]">
+        <Image src={screenSrc} alt="" aria-hidden fill sizes={sizes} className="object-cover opacity-95" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/15 to-transparent" />
+      </div>
+
+      <Image
+        src="/mockups/processed/iphone-frame.webp"
+        alt="iPhone mockup"
+        width={649}
+        height={1324}
+        sizes={sizes}
+        className="h-auto w-full drop-shadow-[0_26px_70px_rgba(0,0,0,0.55)]"
+      />
+    </div>
+  );
 }
 
 export default function LandingPage() {
@@ -147,11 +232,12 @@ export default function LandingPage() {
                 FAQ
               </a>
             </nav>
+            <LanguageSwitcher variant="compact" />
             <Button asChild variant="ghost" size="sm" className="rounded-xl">
               <Link href="/login">Sign in</Link>
             </Button>
             <Button asChild size="sm" className="rounded-xl shadow-soft">
-              <Link href="/register">Join beta</Link>
+              <Link href="/register">Get early access</Link>
             </Button>
           </div>
         </div>
@@ -180,7 +266,7 @@ export default function LandingPage() {
                 <Reveal>
                   <div className="inline-flex items-center gap-2 rounded-pill border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
                     <span className="h-1.5 w-1.5 rounded-full bg-white/50" aria-hidden />
-                    Beta • early access
+                    Early access • waitlist open
                   </div>
                   <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl text-balance">
                     {HERO.headline}
@@ -191,7 +277,7 @@ export default function LandingPage() {
 
                   <div className="mt-9 flex flex-col sm:flex-row gap-3 sm:items-center">
                     <Button asChild size="lg" className="h-12 rounded-2xl px-7 shadow-soft">
-                      <Link href="/register">Join beta</Link>
+                      <Link href="/register">Get early access</Link>
                     </Button>
                     <Button
                       asChild
@@ -217,42 +303,14 @@ export default function LandingPage() {
               <div className="lg:col-span-6">
                 <Reveal delayMs={90} className="relative">
                   <div className="relative mx-auto max-w-[560px] lg:max-w-none">
-                    {/* MacBook placeholder */}
-                    <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md p-3 shadow-card">
-                      <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5">
-                        <Image
-                          src="/stock/processed/abstract-dark-texture-01-section.webp"
-                          alt=""
-                          aria-hidden
-                          fill
-                          sizes="(min-width: 1024px) 520px, 92vw"
-                          className="object-cover opacity-80"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
-                        <div className="absolute inset-0 flex items-end p-4">
-                          <p className="text-xs text-white/70">MacBook mockup placeholder</p>
-                        </div>
-                      </div>
-                    </div>
+                    <MacbookMockup
+                      screenSrc="/stock/processed/cyclist-road-sunset-01-hero.webp"
+                      sizes="(min-width: 1024px) 560px, 92vw"
+                      className="translate-x-0"
+                    />
 
-                    {/* iPhone placeholder */}
-                    <div className="absolute -bottom-10 -left-6 sm:-left-10 w-[220px] sm:w-[240px]">
-                      <div className="rounded-[2.25rem] border border-white/10 bg-white/5 backdrop-blur-md p-2 shadow-card">
-                        <div className="relative aspect-[9/19] overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-white/10 to-white/5">
-                          <Image
-                            src="/stock/processed/abstract-warm-bokeh-01-section.webp"
-                            alt=""
-                            aria-hidden
-                            fill
-                            sizes="240px"
-                            className="object-cover opacity-75"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
-                          <div className="absolute inset-0 flex items-end p-3">
-                            <p className="text-[11px] text-white/70">iPhone mockup placeholder</p>
-                          </div>
-                        </div>
-                      </div>
+                    <div className="absolute -bottom-12 -left-6 sm:-left-12 w-[220px] sm:w-[245px]">
+                      <IphoneMockup screenSrc="/stock/processed/abstract-warm-bokeh-01-hero.webp" sizes="245px" />
                     </div>
                   </div>
                 </Reveal>
@@ -349,25 +407,27 @@ export default function LandingPage() {
               {SCREEN_SLOTS.map((s, idx) => (
                 <Reveal key={s.title} delayMs={idx * 35}>
                   <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md p-3 shadow-soft hover:shadow-card transition-shadow">
-                    <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5">
-                      <Image
-                        src="/stock/processed/cyclist-road-sunset-01-section.webp"
-                        alt=""
-                        aria-hidden
-                        fill
-                        sizes="(min-width: 1024px) 360px, (min-width: 640px) 48vw, 92vw"
-                        className="object-cover opacity-60"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/75 via-transparent to-transparent" />
-                      <div className="absolute inset-0 flex items-end p-4">
-                        <div>
-                          <div className="text-sm font-medium">{s.title}</div>
-                          <div className="mt-1 text-xs text-white/65">{s.caption}</div>
-                        </div>
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-4 sm:p-5">
+                      {s.device === "macbook" ? (
+                        <MacbookMockup
+                          screenSrc={s.imageSrc}
+                          sizes="(min-width: 1024px) 360px, (min-width: 640px) 48vw, 92vw"
+                          className="mx-auto max-w-[420px]"
+                        />
+                      ) : (
+                        <IphoneMockup
+                          screenSrc={s.imageSrc}
+                          sizes="220px"
+                          className="mx-auto w-[210px] sm:w-[220px]"
+                        />
+                      )}
+                      <div className="mt-5">
+                        <div className="text-sm font-medium">{s.title}</div>
+                        <div className="mt-1 text-xs text-white/65">{s.caption}</div>
                       </div>
                     </div>
                     <div className="mt-3 text-xs text-muted-foreground">
-                      Placeholder — podmień na mockup w późniejszym etapie.
+                      Preview images — replace with your real UI mockups later.
                     </div>
                   </div>
                 </Reveal>
@@ -495,7 +555,9 @@ export default function LandingPage() {
           <Container className="py-20 sm:py-28">
             <Reveal className="flex flex-col items-center text-center">
               <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Pricing</h2>
-              <p className="mt-3 text-muted-foreground max-w-2xl">Prosto. W becie skupiamy się na dopasowaniu produktu.</p>
+              <p className="mt-3 text-muted-foreground max-w-2xl">
+                Prosto. Na starcie skupiamy się na dopasowaniu produktu.
+              </p>
             </Reveal>
 
             <div className="mt-12 grid gap-4 sm:gap-6 md:grid-cols-2">
@@ -503,7 +565,7 @@ export default function LandingPage() {
                 <Card className="h-full bg-card/40 backdrop-blur-md border-white/10 shadow-soft hover:shadow-card">
                   <div className="p-7">
                     <div className="flex items-center justify-between gap-4">
-                      <div className="text-sm font-semibold">Beta access</div>
+                      <div className="text-sm font-semibold">Early access</div>
                       <div className="rounded-pill border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
                         Free
                       </div>
@@ -526,7 +588,7 @@ export default function LandingPage() {
                     </ul>
                     <div className="mt-8">
                       <Button asChild className="w-full rounded-2xl h-11 shadow-soft">
-                        <Link href="/register">Join beta</Link>
+                        <Link href="/register">Get early access</Link>
                       </Button>
                     </div>
                   </div>
@@ -617,13 +679,13 @@ export default function LandingPage() {
 
           <Container className="py-20 sm:py-28 text-center">
             <Reveal>
-              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Dołącz do bety</h2>
+              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Dołącz do wczesnego dostępu</h2>
               <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
                 Zacznij bez karty. Zobacz jak wygląda plan dopasowany do realnego życia, nie idealnego tygodnia.
               </p>
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Button asChild size="lg" className="h-12 rounded-2xl px-8 shadow-soft w-full sm:w-auto">
-                  <Link href="/register">Join beta</Link>
+                  <Link href="/register">Get early access</Link>
                 </Button>
                 <Button
                   asChild
