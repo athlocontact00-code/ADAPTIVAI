@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-const ASSET_VERSION = "5";
+const ASSET_VERSION = "6";
 const MARK_DARK = `/brand/logo-mark-dark.svg?v=${ASSET_VERSION}`;
 const LOCKUP_DARK = `/brand/logo-lockup-dark.svg?v=${ASSET_VERSION}`;
 

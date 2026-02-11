@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 };
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://www.adaptivai.online";
-const assetVersion = "5";
+const assetVersion = "6";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
