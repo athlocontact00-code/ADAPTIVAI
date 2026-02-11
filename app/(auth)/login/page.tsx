@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getProviders, signIn } from "next-auth/react";
 import { toast } from "sonner";
@@ -72,120 +73,203 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <Logo variant="lockup" size={36} className="h-9" />
-          </div>
-          <CardTitle>{t("welcomeBackTitle")}</CardTitle>
-          <CardDescription>{t("signInDesc")}</CardDescription>
-        </CardHeader>
-        <form onSubmit={onSubmit}>
-          <CardContent className="space-y-4">
-            {hasOAuth && (
-              <div className="space-y-3">
-                {providers?.google && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={isLoading || oauthLoading !== null}
-                    onClick={() => onOAuth("google")}
-                  >
-                    {oauthLoading === "google" ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Continue with Google
-                      </>
-                    ) : (
-                      <>
-                        <Chrome className="mr-2 h-4 w-4" />
-                        Continue with Google
-                      </>
-                    )}
-                  </Button>
-                )}
-                {providers?.apple && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={isLoading || oauthLoading !== null}
-                    onClick={() => onOAuth("apple")}
-                  >
-                    {oauthLoading === "apple" ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Continue with Apple
-                      </>
-                    ) : (
-                      <>
-                        <Apple className="mr-2 h-4 w-4" />
-                        Continue with Apple
-                      </>
-                    )}
-                  </Button>
-                )}
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="relative min-h-screen">
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="/stock/processed/abstract-dark-texture-01-hero.webp"
+            alt=""
+            aria-hidden
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-background/85 to-background" />
+          <div className="absolute inset-0 opacity-80 [background:radial-gradient(600px_circle_at_20%_10%,rgba(255,122,24,.18),transparent_60%),radial-gradient(700px_circle_at_80%_0%,rgba(168,85,247,.14),transparent_60%),radial-gradient(900px_circle_at_50%_100%,rgba(30,58,138,.18),transparent_60%)]" />
+        </div>
 
-                <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-border/60" />
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 py-10 sm:py-14">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2.5">
+              <Logo variant="lockup" size={30} className="h-7" />
+            </Link>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline text-xs text-muted-foreground">New here?</span>
+              <Button asChild variant="ghost" size="sm" className="rounded-xl">
+                <Link href="/register">{t("signUp")}</Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-6 lg:gap-8 lg:grid-cols-2 items-stretch">
+            {/* Form */}
+            <Card className="w-full bg-card/40 backdrop-blur-md border-white/10 shadow-card hover:shadow-card">
+              <CardHeader className="text-left">
+                <CardTitle className="text-lg">{t("welcomeBackTitle")}</CardTitle>
+                <CardDescription>{t("signInDesc")}</CardDescription>
+              </CardHeader>
+
+              <form onSubmit={onSubmit}>
+                <CardContent className="space-y-4">
+                  {hasOAuth && (
+                    <div className="space-y-3">
+                      {providers?.google && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full rounded-2xl border-white/15 bg-white/0 hover:bg-white/5"
+                          disabled={isLoading || oauthLoading !== null}
+                          onClick={() => onOAuth("google")}
+                        >
+                          {oauthLoading === "google" ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Continue with Google
+                            </>
+                          ) : (
+                            <>
+                              <Chrome className="mr-2 h-4 w-4" />
+                              Continue with Google
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {providers?.apple && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full rounded-2xl border-white/15 bg-white/0 hover:bg-white/5"
+                          disabled={isLoading || oauthLoading !== null}
+                          onClick={() => onOAuth("apple")}
+                        >
+                          {oauthLoading === "apple" ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Continue with Apple
+                            </>
+                          ) : (
+                            <>
+                              <Apple className="mr-2 h-4 w-4" />
+                              Continue with Apple
+                            </>
+                          )}
+                        </Button>
+                      )}
+
+                      <div className="relative py-1">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-border/60" />
+                        </div>
+                        <div className="relative flex justify-center">
+                          <span className="bg-background/80 px-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur">
+                            Or email
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder={t("emailPlaceholder")}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
                   </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-card px-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Or
-                    </span>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
                   </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    No credit card • Takes 30 seconds • Privacy‑first
+                  </p>
+                </CardContent>
+
+                <CardFooter className="flex flex-col gap-4">
+                  <Button type="submit" className="w-full rounded-2xl h-11 shadow-soft" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {t("signingIn")}
+                      </>
+                    ) : (
+                      t("signIn")
+                    )}
+                  </Button>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {t("noAccount")}{" "}
+                    <Link href="/register" className="text-primary hover:underline">
+                      {t("signUp")}
+                    </Link>
+                  </p>
+                </CardFooter>
+              </form>
+            </Card>
+
+            {/* Benefits / visual */}
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md shadow-card">
+              <div className="absolute inset-0">
+                <Image
+                  src="/stock/processed/runner-silhouette-sunset-01-hero.webp"
+                  alt=""
+                  aria-hidden
+                  fill
+                  sizes="(min-width: 1024px) 520px, 92vw"
+                  className="object-cover opacity-70"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-background/80 to-background" />
+              </div>
+
+              <div className="relative p-7 sm:p-8 h-full flex flex-col">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/60">AdaptivAI</p>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-balance text-white">
+                  Plan that adapts to your real week.
+                </h2>
+                <p className="mt-3 text-sm text-white/70 max-w-md">
+                  Daily check‑in → plan → clear “why” → alternatives when life happens.
+                </p>
+
+                <div className="mt-7 space-y-3">
+                  {[
+                    { title: "Reschedule in one tap", body: "Keep key workouts. Move the rest." },
+                    { title: "Readiness‑aware intensity", body: "Hard / easy / rest — based on you." },
+                    { title: "Explainable coaching", body: "Every session comes with a goal and context." },
+                  ].map((b) => (
+                    <div key={b.title} className="rounded-2xl border border-white/10 bg-black/25 backdrop-blur px-4 py-3">
+                      <div className="text-sm font-medium text-white/90">{b.title}</div>
+                      <div className="mt-1 text-xs text-white/65">{b.body}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-auto pt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/65">
+                  {["No credit card", "Takes 30 seconds", "Privacy‑first"].map((item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <span className="h-1 w-1 rounded-full bg-white/40" aria-hidden />
+                      <span>{item}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                 placeholder={t("emailPlaceholder")}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-              />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("signingIn")}
-                </>
-              ) : (
-                t("signIn")
-              )}
-            </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              {t("noAccount")}{" "}
-              <Link href="/register" className="text-primary hover:underline">
-                {t("signUp")}
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

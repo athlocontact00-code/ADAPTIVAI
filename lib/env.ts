@@ -10,6 +10,9 @@ const envSchema = z
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     APPLE_CLIENT_ID: z.string().optional(),
     APPLE_CLIENT_SECRET: z.string().optional(),
+    APPLE_TEAM_ID: z.string().optional(),
+    APPLE_KEY_ID: z.string().optional(),
+    APPLE_PRIVATE_KEY: z.string().optional(),
     BLOB_READ_WRITE_TOKEN: z.string().optional(),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
@@ -90,6 +93,15 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ["OPENAI_API_KEY"],
         message: "OPENAI_API_KEY looks too short",
+      });
+    }
+
+    const applePieces = [data.APPLE_TEAM_ID, data.APPLE_KEY_ID, data.APPLE_PRIVATE_KEY].filter(Boolean).length;
+    if (applePieces > 0 && applePieces < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["APPLE_PRIVATE_KEY"],
+        message: "Apple Sign In requires APPLE_TEAM_ID + APPLE_KEY_ID + APPLE_PRIVATE_KEY (or set APPLE_CLIENT_SECRET)",
       });
     }
   });
