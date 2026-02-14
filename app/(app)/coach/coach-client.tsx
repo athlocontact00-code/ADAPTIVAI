@@ -40,7 +40,7 @@ import { undoDraftWorkouts, insertWorkoutFromCoachResponse, updateCoachIncludeRe
 import { isSendToCalendarIntent, extractCoachIntent } from "@/lib/utils/coach-intent";
 
 const EMPTY_STATE_MESSAGE =
-  "No workouts yet. Generate today's workout or start a chat.";
+  "👋 Hey! I'm your AI Coach. I can generate workouts, plan your week, adjust intensity based on how you feel, and answer training questions.\n\nTry asking me something — or tap a quick action below to get started.";
 
 // Mobile-only command palette: 1 quick prompt + More actions (bottom sheet).
 const MOBILE_CHIPS: CoachCommandChip[] = [

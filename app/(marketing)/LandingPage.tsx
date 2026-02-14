@@ -133,10 +133,11 @@ const PRO_FEATURES = [
 ];
 
 const FREE_FEATURES = [
-  "Basic workout logging",
-  "Simple calendar view",
-  "Community access",
-  "Basic metrics",
+  "Dashboard with key metrics",
+  "Training calendar",
+  "Daily check-in & readiness",
+  "Training diary (10 entries/mo)",
+  "Getting started guide",
 ];
 
 const FOOTER_LINKS = {

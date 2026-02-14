@@ -2,11 +2,12 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-
-const ALLOWED_WHEN_FREE = ["/trial-ended", "/settings"];
+import { isProPath, FREE_ALLOWED_PATHS } from "@/lib/tiers";
 
 function isAllowedPath(pathname: string): boolean {
-  return ALLOWED_WHEN_FREE.some((allowed) => pathname === allowed || pathname.startsWith(allowed + "/"));
+  return FREE_ALLOWED_PATHS.some(
+    (allowed) => pathname === allowed || pathname.startsWith(allowed + "/"),
+  );
 }
 
 interface TrialGateProps {
@@ -15,7 +16,9 @@ interface TrialGateProps {
 }
 
 /**
- * When plan is FREE (trial ended, no Pro), redirect to /trial-ended unless the user is already on an allowed path (trial-ended or settings to upgrade).
+ * Freemium gate: Free users can access basic features (dashboard, calendar,
+ * diary, today, settings, getting-started). Pro-only paths redirect to the
+ * paywall page (/trial-ended). TRIAL and PRO users get full access.
  */
 export function TrialGate({ plan, children }: TrialGateProps) {
   const pathname = usePathname();
@@ -23,11 +26,16 @@ export function TrialGate({ plan, children }: TrialGateProps) {
 
   useEffect(() => {
     if (plan !== "FREE") return;
-    if (isAllowedPath(pathname ?? "")) return;
-    router.replace("/trial-ended");
+    if (!pathname) return;
+    if (isAllowedPath(pathname)) return;
+    // Pro-only path — redirect to trial-ended
+    if (isProPath(pathname)) {
+      router.replace("/trial-ended");
+    }
   }, [plan, pathname, router]);
 
-  if (plan === "FREE" && pathname != null && !isAllowedPath(pathname)) {
+  // Block render only for pro-only paths while redirecting
+  if (plan === "FREE" && pathname != null && !isAllowedPath(pathname) && isProPath(pathname)) {
     return null;
   }
 

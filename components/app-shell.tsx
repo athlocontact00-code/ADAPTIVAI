@@ -20,6 +20,7 @@ import {
   Target,
   FlaskConical,
   Sun,
+  Crown,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
@@ -79,34 +80,34 @@ function useNavSections() {
     {
       title: null as string | null,
       items: [
-        { name: t("dashboard"), href: "/dashboard", icon: LayoutDashboard },
-        { name: t("today"), href: "/today", icon: Sun },
+        { name: t("dashboard"), href: "/dashboard", icon: LayoutDashboard, proOnly: false },
+        { name: t("today"), href: "/today", icon: Sun, proOnly: false },
       ],
     },
     {
       title: t("training"),
       items: [
-        { name: t("calendar"), href: "/calendar", icon: Calendar },
-        { name: t("season"), href: "/season", icon: Target },
-        { name: t("diary"), href: "/diary", icon: BookOpen },
+        { name: t("calendar"), href: "/calendar", icon: Calendar, proOnly: false },
+        { name: t("season"), href: "/season", icon: Target, proOnly: true },
+        { name: t("diary"), href: "/diary", icon: BookOpen, proOnly: false },
       ],
     },
     {
       title: t("insights"),
-      items: [{ name: t("progress"), href: "/progress", icon: TrendingUp }],
+      items: [{ name: t("progress"), href: "/progress", icon: TrendingUp, proOnly: true }],
     },
     {
       title: t("ai"),
       items: [
-        { name: t("aiCoach"), href: "/coach", icon: Bot },
-        { name: t("simulator"), href: "/simulator", icon: FlaskConical },
+        { name: t("aiCoach"), href: "/coach", icon: Bot, proOnly: true },
+        { name: t("simulator"), href: "/simulator", icon: FlaskConical, proOnly: true },
       ],
     },
     {
       title: t("settings"),
       items: [
-        { name: t("gettingStarted"), href: "/getting-started", icon: HelpCircle },
-        { name: t("settings"), href: "/settings", icon: Settings },
+        { name: t("gettingStarted"), href: "/getting-started", icon: HelpCircle, proOnly: false },
+        { name: t("settings"), href: "/settings", icon: Settings, proOnly: false },
       ],
     },
   ];
@@ -121,9 +122,10 @@ interface AppShellProps {
   };
   planBadge?: string | null;
   showFinishSetupBanner?: boolean;
+  isPro?: boolean;
 }
 
-export function AppShell({ children, user, planBadge, showFinishSetupBanner }: AppShellProps) {
+export function AppShell({ children, user, planBadge, showFinishSetupBanner, isPro = true }: AppShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigationSections = useNavSections();
@@ -192,7 +194,10 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner }: A
                   >
                     <item.icon className="h-4 w-4" />
                     {item.name}
-                    {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                    {!isPro && item.proOnly && (
+                      <Crown className="ml-auto h-3 w-3 text-orange-500" />
+                    )}
+                    {isActive && !(!isPro && item.proOnly) && <ChevronRight className="ml-auto h-4 w-4" />}
                   </Link>
                 );
               })}
