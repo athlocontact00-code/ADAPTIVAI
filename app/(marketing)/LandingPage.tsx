@@ -12,7 +12,6 @@ import {
   Heart,
   CheckCircle,
   XCircle,
-  Star,
   ArrowRight,
   Instagram,
   Twitter,
@@ -21,7 +20,6 @@ import {
 
 import { CheckinMockup, CoachMockup, CalendarMockup } from "./components/app-mockup";
 import { AnimatedBg } from "./components/animated-bg";
-import { StatsCounter } from "./components/stats-counter";
 
 const MAX_W = "max-w-6xl";
 
@@ -67,30 +65,6 @@ const BENEFITS = [
     title: "Diary feedback loop",
     body: "Mood, energy, sleep and soreness feed back into planning for better, more realistic weeks.",
     icon: Calendar,
-  },
-];
-
-const TESTIMONIALS = [
-  {
-    quote: "Finally, a training platform that actually understands recovery. My coach couldn't believe how much my consistency improved.",
-    name: "Sarah Chen",
-    sport: "Triathlete",
-    rating: 5,
-    avatar: "SC"
-  },
-  {
-    quote: "The AI coach suggestions are spot-on. It's like having a personal trainer who knows exactly when to push and when to back off.",
-    name: "Mike Rodriguez", 
-    sport: "Marathon Runner",
-    rating: 5,
-    avatar: "MR"
-  },
-  {
-    quote: "Best investment in my training. The readiness score alone has prevented multiple overuse injuries.",
-    name: "Emma Thompson",
-    sport: "Cyclist", 
-    rating: 5,
-    avatar: "ET"
   },
 ];
 
@@ -142,8 +116,8 @@ const FREE_FEATURES = [
 
 const FOOTER_LINKS = {
   product: [
-    { href: "/features", label: "Features" },
-    { href: "/pricing", label: "Pricing" },
+    { href: "/#features", label: "Features" },
+    { href: "/#pricing", label: "Pricing" },
     { href: "/install", label: "Install App" },
     { href: "/support", label: "Support" },
   ],
@@ -267,22 +241,11 @@ export default function LandingPage() {
         {/* Social Proof Bar */}
         <section className="border-t border-border/40 bg-background/50 backdrop-blur-sm">
           <Container className="py-8">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">Trusted by 500+ athletes</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  ))}
-                  <span className="ml-1 text-sm text-muted-foreground">5.0</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full text-xs font-medium text-orange-400">
-                  Featured on ProductHunt
-                </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Zap className="w-4 h-4 text-orange-400" />
+                <span className="font-semibold text-foreground">Now in early access</span>
+                <span>— join athletes already testing the beta</span>
               </div>
             </div>
           </Container>
@@ -348,7 +311,7 @@ export default function LandingPage() {
         </section>
 
         {/* Features Section */}
-        <section className="border-t border-border/40">
+        <section className="border-t border-border/40" id="features">
           <Container className="py-16 sm:py-20">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -474,10 +437,15 @@ export default function LandingPage() {
           </Container>
         </section>
 
-        {/* Stats Counter */}
+        {/* Beta Banner */}
         <section className="border-t border-border/40 bg-background/50">
-          <Container className="py-16 sm:py-20">
-            <StatsCounter />
+          <Container className="py-12 sm:py-16">
+            <div className="text-center">
+              <p className="text-lg sm:text-xl font-semibold text-foreground mb-2">Beta users growing weekly</p>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                We're building AdaptivAI with early adopters. Your feedback shapes the product.
+              </p>
+            </div>
           </Container>
         </section>
 
@@ -505,7 +473,7 @@ export default function LandingPage() {
             >
               <Card className="bg-card/40 backdrop-blur-md border-white/10 shadow-soft overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full min-w-[500px]">
                     <thead>
                       <tr className="border-b border-white/10">
                         <th className="text-left p-4 text-sm font-semibold">Feature</th>
@@ -566,60 +534,29 @@ export default function LandingPage() {
           </Container>
         </section>
 
-        {/* Testimonials */}
+        {/* Early Access CTA */}
         <section className="border-t border-border/40">
           <Container className="py-16 sm:py-20">
             <motion.div 
-              className="text-center mb-12"
+              className="text-center"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               viewport={{ once: true }}
             >
-              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-4">What athletes say</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                Join hundreds of athletes who've transformed their training
+              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-4">Built with athletes, for athletes</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto mb-8">
+                We're in early access — shaping AdaptivAI together with real athletes. Try it free and help us build the training platform you actually want.
               </p>
+              <Button asChild size="lg" className="h-12 rounded-2xl px-8 shadow-soft">
+                <Link href="/register">Join the beta</Link>
+              </Button>
             </motion.div>
-
-            <div className="grid gap-6 md:grid-cols-3">
-              {TESTIMONIALS.map((testimonial, index) => (
-                <motion.div
-                  key={testimonial.name}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1, duration: 0.6 }}
-                  viewport={{ once: true }}
-                >
-                  <Card className="bg-card/40 backdrop-blur-md border-white/10 shadow-soft hover:shadow-card hover:bg-white/5 transition-all duration-300 h-full">
-                    <div className="p-6">
-                      <div className="flex mb-4">
-                        {[...Array(testimonial.rating)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        ))}
-                      </div>
-                      <blockquote className="text-sm text-muted-foreground leading-relaxed mb-4">
-                        "{testimonial.quote}"
-                      </blockquote>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-bold">{testimonial.avatar}</span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold">{testimonial.name}</div>
-                          <div className="text-xs text-muted-foreground">{testimonial.sport}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
           </Container>
         </section>
 
         {/* Enhanced Pricing */}
-        <section className="border-t border-border/40">
+        <section className="border-t border-border/40" id="pricing">
           <Container className="py-16 sm:py-20">
             <motion.div 
               className="text-center mb-12"
@@ -802,7 +739,7 @@ export default function LandingPage() {
                   transition={{ delay: 0.1, duration: 0.6 }}
                   viewport={{ once: true }}
                 >
-                  <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Join 500+ athletes training smarter</h2>
+                  <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Ready to train smarter?</h2>
                   <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
                     Start your free trial today. No credit card required.
                   </p>
