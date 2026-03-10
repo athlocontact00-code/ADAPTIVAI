@@ -33,93 +33,23 @@ function parseGraceDays(): number {
  * - Else -> FREE
  */
 export async function getEntitlements(userId: string): Promise<Entitlements> {
-  const now = new Date();
-  const nowMs = now.getTime();
+  // PHASE 6: Mega Viral Update. The app is completely free.
+  // Bypass all Stripe subscription checks and grant PRO to everyone.
 
-  const override = await db.entitlementOverride.findUnique({
-    where: { userId },
-    select: { proEnabled: true, expiresAt: true },
-  });
-  const overrideActive =
-    override?.proEnabled &&
-    (override.expiresAt == null || override.expiresAt.getTime() > nowMs);
-
-  if (overrideActive) {
-    return {
-      isPro: true,
-      plan: "PRO",
-      status: "override",
-      renewAt: override?.expiresAt ?? null,
-      isTrialActive: false,
-      trialEndsAt: null,
-      trialDaysRemaining: null,
-      canUseAICoach: true,
-      canUseSimulator: true,
-      canUseReports: true,
-      currentPeriodEnd: override?.expiresAt ?? null,
-      cancelAtPeriodEnd: false,
-    };
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: {
-      trialStartedAt: true,
-      trialEndsAt: true,
-    },
-  });
-
-  const sub = await db.subscription.findFirst({
-    where: { userId },
-    orderBy: { updatedAt: "desc" },
-    select: {
-      plan: true,
-      status: true,
-      currentPeriodEnd: true,
-      cancelAtPeriodEnd: true,
-    },
-  });
-
-  const trialEndsAt = user?.trialEndsAt ?? null;
-  const trialTimeLeft = Boolean(trialEndsAt && trialEndsAt.getTime() > nowMs);
-
-  parseGraceDays(); // grace period config (reserved for future use)
-  const renewAt = sub?.currentPeriodEnd ?? (trialTimeLeft ? trialEndsAt : null);
-
-  // isPro from subscription: status in ["active","trialing"] AND currentPeriodEnd > now (trial only when no active sub)
-  const isPaidPro = Boolean(
-    sub?.plan === "pro" &&
-      isProSubscriptionStatus(sub.status) &&
-      sub.currentPeriodEnd &&
-      sub.currentPeriodEnd.getTime() > nowMs
-  );
-  const isTrialActive = trialTimeLeft && !isPaidPro;
-
-  const plan: "FREE" | "TRIAL" | "PRO" = isPaidPro ? "PRO" : isTrialActive ? "TRIAL" : "FREE";
-  const isPro = isPaidPro || isTrialActive;
-
-  const trialDaysRemaining =
-    isTrialActive && trialEndsAt
-      ? Math.max(0, Math.ceil((trialEndsAt.getTime() - nowMs) / 86400000))
-      : null;
-
-  const canUseAICoach = isPro;
-  const canUseSimulator = isPaidPro;
-  const canUseReports = isPaidPro;
-
+  // Return mocked infinite entitlement
   return {
-    isPro,
-    plan,
-    status: sub?.status ?? (isTrialActive ? "trial" : null),
-    renewAt,
-    isTrialActive: isTrialActive && !isPaidPro,
-    trialEndsAt,
-    trialDaysRemaining,
-    canUseAICoach,
-    canUseSimulator,
-    canUseReports,
-    currentPeriodEnd: sub?.currentPeriodEnd ?? null,
-    cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
+    isPro: true,
+    plan: "PRO",
+    status: "active",
+    renewAt: new Date(2100, 1, 1),
+    isTrialActive: false,
+    trialEndsAt: null,
+    trialDaysRemaining: null,
+    canUseAICoach: true,
+    canUseSimulator: true,
+    canUseReports: true,
+    currentPeriodEnd: new Date(2100, 1, 1),
+    cancelAtPeriodEnd: false,
   };
 }
 
@@ -133,9 +63,6 @@ export async function requireUserId(): Promise<string> {
 
 export async function requireProUser(userId: string): Promise<Entitlements> {
   const ent = await getEntitlements(userId);
-  if (!ent.isPro) {
-    throw new Error("Pro subscription required");
-  }
   return ent;
 }
 

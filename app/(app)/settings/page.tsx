@@ -274,7 +274,7 @@ export default function SettingsPage() {
         .then((data) => {
           if (data?.plan) setPlanInfo(data.plan);
         })
-        .catch(() => {});
+        .catch(() => { });
 
     const applyPlanFromData = (data: { plan?: string; status?: string; subscriptionStatus?: string; trialDaysRemaining?: number | null; currentPeriodEnd?: string | null; cancelAtPeriodEnd?: boolean } | null) => {
       if (data && typeof data.plan === "string") {
@@ -406,7 +406,7 @@ export default function SettingsPage() {
         setBenchmarks(bench);
         setInitialBenchmarks(bench);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     getExplainLevel().then(setExplainLevel);
     getIdentityMode().then((m) => setIdentityMode(m as typeof identityMode));
@@ -725,7 +725,6 @@ export default function SettingsPage() {
                 <SelectItem value="profile">{t("profile")}</SelectItem>
                 <SelectItem value="zones">{t("heartRateZones")}</SelectItem>
                 <SelectItem value="ai">{t("aiSettings")}</SelectItem>
-                <SelectItem value="billing">{t("billing")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -751,13 +750,6 @@ export default function SettingsPage() {
             >
               <Brain className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{t("aiSettings")}</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="billing"
-              className="flex items-center gap-2 rounded-[10px] px-3 sm:px-4 py-2 data-[state=active]:bg-white/10 shrink-0"
-            >
-              <CreditCard className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{t("billing")}</span>
             </TabsTrigger>
           </TabsList>
 

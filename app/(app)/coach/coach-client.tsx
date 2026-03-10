@@ -33,7 +33,6 @@ import { CoachCommandCenter } from "@/components/coach/coach-command-center";
 import { CoachMessageRenderer } from "@/components/coach/coach-message-renderer";
 import { CoachContextToggles, type CoachContextPayload } from "@/components/coach/coach-context-toggles";
 import { HowItWorksDialog } from "@/components/coach/how-it-works-dialog";
-import { PaywallCard } from "@/components/paywall-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { sendCoachMessage } from "@/lib/actions/coach-chat";
 import { undoDraftWorkouts, insertWorkoutFromCoachResponse, updateCoachIncludeResultTemplate } from "@/lib/actions/coach-draft";
@@ -303,25 +302,25 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
     setConversations((prev) => {
       const next = prev.some((c) => c.id === activeConversationId)
         ? prev.map((c) =>
-            c.id === activeConversationId
-              ? {
-                  ...c,
-                  title,
-                  updatedAt: nowIso,
-                  messages: storedMessages,
-                }
-              : c
-          )
-        : [
-            {
-              id: activeConversationId,
+          c.id === activeConversationId
+            ? {
+              ...c,
               title,
-              createdAt: nowIso,
               updatedAt: nowIso,
               messages: storedMessages,
-            },
-            ...prev,
-          ];
+            }
+            : c
+        )
+        : [
+          {
+            id: activeConversationId,
+            title,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            messages: storedMessages,
+          },
+          ...prev,
+        ];
 
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -535,10 +534,10 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
   async function handleBurnoutAction(actionId: string) {
     setIsApplyingAction(actionId);
     try {
-      const result = actionId === "simplify" 
+      const result = actionId === "simplify"
         ? await applySimplifyWeek()
         : await applyRecoveryMicrocycle();
-      
+
       if (result.success) {
         toast.success(result.message);
         router.refresh();
@@ -561,27 +560,6 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
     } finally {
       setIsApplyingAction(null);
     }
-  }
-
-  if (!canUseAICoach) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Bot className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">AI Coach</h1>
-            <p className="text-sm text-muted-foreground">Generate personalized training plans</p>
-          </div>
-        </div>
-        <PaywallCard
-          title="Trial ended"
-          message="Upgrade to Pro to use AI Coach and unlock all premium features."
-          trialEndsAt={trialEndsAt}
-        />
-      </div>
-    );
   }
 
   return (
@@ -644,11 +622,10 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
                           switchConversation(c.id);
                           setChatsOpen(false);
                         }}
-                        className={`w-full text-left rounded-xl border px-3 py-3 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
-                          isActive
-                            ? "border-primary bg-primary/5"
-                            : "border-border/50 hover:bg-muted/50"
-                        }`}
+                        className={`w-full text-left rounded-xl border px-3 py-3 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${isActive
+                          ? "border-primary bg-primary/5"
+                          : "border-border/50 hover:bg-muted/50"
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -789,13 +766,12 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-lg p-3 ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : message.role === "system"
+                    className={`max-w-[85%] rounded-lg p-3 ${message.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : message.role === "system"
                         ? "bg-muted/50 text-muted-foreground italic"
                         : "bg-muted"
-                    }`}
+                      }`}
                   >
                     <CoachMessageRenderer
                       content={message.content}
@@ -887,11 +863,10 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
                         key={c.id}
                         type="button"
                         onClick={() => switchConversation(c.id)}
-                        className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
-                          isActive
-                            ? "border-primary bg-primary/5"
-                            : "border-border/50 hover:bg-muted/50"
-                        }`}
+                        className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${isActive
+                          ? "border-primary bg-primary/5"
+                          : "border-border/50 hover:bg-muted/50"
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -931,10 +906,9 @@ export function CoachClient({ userId, context, recentLogs, psychologyData, pageD
                     <Battery className="h-4 w-4 text-muted-foreground" />
                     <span>Readiness</span>
                   </div>
-                  <span className={`font-medium ${
-                    context.readiness >= 70 ? "text-green-500" : 
+                  <span className={`font-medium ${context.readiness >= 70 ? "text-green-500" :
                     context.readiness >= 40 ? "text-yellow-500" : "text-red-500"
-                  }`}>
+                    }`}>
                     {Math.round(context.readiness)}%
                   </span>
                 </div>

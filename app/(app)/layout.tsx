@@ -5,6 +5,7 @@ import { getEntitlements } from "@/lib/billing/entitlements";
 import { setSentryUser } from "@/lib/sentry";
 import { AppShell } from "@/components/app-shell";
 import { TrialGate } from "@/components/trial-gate";
+import { GlobalViralInvite } from "@/components/global-viral-invite";
 
 export default async function AppLayout({
   children,
@@ -42,18 +43,11 @@ export default async function AppLayout({
           image: user.image,
         }}
         showFinishSetupBanner={Boolean(user.onboardingDismissedAt && !user.onboardingDone)}
-        isPro={entitlements.isPro}
-        planBadge={
-          entitlements.plan === "PRO"
-            ? "Pro"
-            : entitlements.isTrialActive && entitlements.trialDaysRemaining != null
-              ? `Trial: ${entitlements.trialDaysRemaining}d left`
-              : entitlements.plan === "FREE"
-                ? "Free — Upgrade"
-                : null
-        }
+        isPro={true}
+        planBadge={null}
       >
         {children}
+        <GlobalViralInvite />
       </AppShell>
     </TrialGate>
   );

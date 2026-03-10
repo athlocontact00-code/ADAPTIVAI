@@ -132,11 +132,11 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner, isP
 
   const initials = user.name
     ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
     : user.email?.slice(0, 2).toUpperCase() || "U";
 
   return (
@@ -232,14 +232,6 @@ export function AppShell({ children, user, planBadge, showFinishSetupBanner, isP
           </Link>
           <div className="flex-1 min-w-0" />
 
-          {planBadge && (
-            <Link
-              href="/settings?tab=billing"
-              className="text-xs font-medium px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20"
-            >
-              {planBadge}
-            </Link>
-          )}
           <LanguageSwitcher variant="compact" />
           <NotificationCenter />
 
