@@ -53,27 +53,37 @@ function inferSport(text: string): "SWIM" | "BIKE" | "RUN" | "STRENGTH" {
 
 /** Format A: --- Title: ... Sport: ... Total: ... --- */
 function parseCalendarBlock(text: string): ParsedWorkout | null {
-  const block = text.match(/---\s*\n([\s\S]*?)\n---/);
-  if (!block) return null;
-  const inner = block[1];
-  const title = inner.match(/(?:^|\n)\s*Title:\s*(.+?)(?:\n|$)/im)?.[1]?.trim();
-  const sportRaw = inner.match(/(?:^|\n)\s*Sport:\s*(.+?)(?:\n|$)/im)?.[1]?.trim()?.toUpperCase();
-  const totalRaw = inner.match(/(?:^|\n)\s*Total:\s*(.+?)(?:\n|$)/im)?.[1]?.trim();
-  if (!title && !sportRaw) return null;
-  const sport =
-    sportRaw === "SWIM" || sportRaw === "BIKE" || sportRaw === "RUN" || sportRaw === "STRENGTH"
-      ? sportRaw
-      : inferSport(inner);
-  const titleRes = title || (sport === "SWIM" ? "Swim Session" : sport === "BIKE" ? "Bike Session" : sport === "RUN" ? "Run Session" : "Strength Session");
-  const minMatch = totalRaw?.match(/(\d+)\s*(?:min|minutes?|m\b)/i);
-  const totalMinutes = minMatch ? parseInt(minMatch[1], 10) : 60;
-  return {
-    title: titleRes,
-    sport,
-    totalMinutes,
-    descriptionMarkdown: inner.trim(),
-    totalDistanceM: undefined,
-  };
+  const blocks = [...text.matchAll(/---\s*\n([\s\S]*?)\n---/g)];
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const inner = blocks[i][1];
+    const title = inner.match(/(?:^|\n)\s*Title:\s*(.+?)(?:\n|$)/im)?.[1]?.trim();
+    const sportRaw = inner.match(/(?:^|\n)\s*Sport:\s*(.+?)(?:\n|$)/im)?.[1]?.trim()?.toUpperCase();
+    const totalRaw = inner.match(/(?:^|\n)\s*Total:\s*(.+?)(?:\n|$)/im)?.[1]?.trim();
+    if (!title && !sportRaw) continue;
+    const sport =
+      sportRaw === "SWIM" || sportRaw === "BIKE" || sportRaw === "RUN" || sportRaw === "STRENGTH"
+        ? sportRaw
+        : inferSport(inner);
+    const titleRes =
+      title ||
+      (sport === "SWIM"
+        ? "Swim Session"
+        : sport === "BIKE"
+          ? "Bike Session"
+          : sport === "RUN"
+            ? "Run Session"
+            : "Strength Session");
+    const minMatch = totalRaw?.match(/(\d+)\s*(?:min|minutes?|m\b)/i);
+    const totalMinutes = minMatch ? parseInt(minMatch[1], 10) : 60;
+    return {
+      title: titleRes,
+      sport,
+      totalMinutes,
+      descriptionMarkdown: inner.trim(),
+      totalDistanceM: undefined,
+    };
+  }
+  return null;
 }
 
 /** Format B: TITLE: / SPORT: / TOTAL TIME: labeled lines (or **TRENING 1: ... ** style) */

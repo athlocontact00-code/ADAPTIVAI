@@ -218,7 +218,7 @@ export default function SettingsPage() {
   const hasChanges = profileDirty;
 
   useEffect(() => {
-    const tab = searchParams.get("tab");
+    const tab = searchParams?.get("tab");
     if (tab === "billing") setActiveTab("billing");
   }, [searchParams]);
 
@@ -251,10 +251,10 @@ export default function SettingsPage() {
   }, [initialProfile, initialZones, initialBenchmarks, initialAvailability, initialPreferences, initialGuardrails]);
 
   useEffect(() => {
-    const successParam = searchParams.get("success") === "1";
-    const checkoutSuccess = searchParams.get("checkout") === "success";
-    const portalReturn = searchParams.get("portal") === "return";
-    const sessionId = (searchParams.get("session_id") ?? "").trim();
+    const successParam = searchParams?.get("success") === "1";
+    const checkoutSuccess = searchParams?.get("checkout") === "success";
+    const portalReturn = searchParams?.get("portal") === "return";
+    const sessionId = (searchParams?.get("session_id") ?? "").trim();
     const hasCheckoutSession = sessionId.startsWith("cs_");
     const shouldSyncAfterPayment = hasCheckoutSession || successParam || checkoutSuccess || portalReturn;
 

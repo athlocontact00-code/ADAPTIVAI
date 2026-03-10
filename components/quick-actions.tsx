@@ -50,7 +50,7 @@ export function QuickActions({
           Quick Actions
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-2">
+      <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {actions.map((action, i) => (
           action.href ? (
             <Link key={i} href={action.href}>
@@ -69,7 +69,7 @@ function QuickActionButton({ action }: { action: QuickAction }) {
   return (
     <button
       onClick={action.onClick}
-      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/50 transition-all text-left w-full group"
+      className="flex min-h-[44px] items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/50 transition-all text-left w-full group"
     >
       <div className="p-2 rounded-md bg-muted group-hover:bg-primary/10 transition-colors">
         {action.icon}

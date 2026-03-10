@@ -33,7 +33,9 @@ const nextConfig: NextConfig = {
 
 const pwaOptions = {
   dest: "public",
-  disable: process.env.NODE_ENV === "development",
+  // next-pwa is currently flaky with this app-router setup on clean builds.
+  // Keep PWA support available, but only enable it explicitly.
+  disable: process.env.NODE_ENV === "development" || process.env.ENABLE_PWA !== "true",
   fallbacks: {
     document: "/~offline",
   },

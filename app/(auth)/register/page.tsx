@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { Apple, Chrome, Loader2 } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +19,11 @@ export default function RegisterPage() {
   const t = useTranslations("auth");
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const callbackUrl = searchParams?.get("callbackUrl") ?? "/dashboard";
+  const loginHref =
+    callbackUrl === "/dashboard"
+      ? "/login"
+      : `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
 
   const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
@@ -67,7 +72,7 @@ export default function RegisterPage() {
       }
 
       toast.success(t("accountCreated"));
-      router.push("/login");
+      router.push(loginHref);
     } catch {
       toast.error(t("somethingWrong"));
       setIsLoading(false);
@@ -76,6 +81,12 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-xl focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-card"
+      >
+        Skip to content
+      </a>
       <div className="relative min-h-screen">
         <div className="absolute inset-0 -z-10">
           <Image
@@ -97,14 +108,15 @@ export default function RegisterPage() {
               <Logo variant="lockup" size={30} className="h-7" />
             </Link>
             <div className="flex items-center gap-2">
+              <LanguageSwitcher variant="compact" />
               <span className="hidden sm:inline text-xs text-muted-foreground">{t("hasAccount")}</span>
               <Button asChild variant="ghost" size="sm" className="rounded-xl">
-                <Link href="/login">{t("signIn")}</Link>
+                <Link href={loginHref}>{t("signIn")}</Link>
               </Button>
             </div>
           </div>
 
-          <div className="mt-10 grid gap-6 lg:gap-8 lg:grid-cols-2 items-stretch">
+          <main id="main-content" className="mt-10 grid gap-6 lg:gap-8 lg:grid-cols-2 items-stretch">
             {/* Form */}
             <Card className="w-full bg-card/40 backdrop-blur-md border-white/10 shadow-card hover:shadow-card">
               <CardHeader className="text-left">
@@ -112,7 +124,7 @@ export default function RegisterPage() {
                 <CardDescription>{t("createAccountDesc")}</CardDescription>
               </CardHeader>
 
-              <form onSubmit={onSubmit}>
+              <form onSubmit={onSubmit} noValidate aria-busy={isLoading || oauthLoading !== null}>
                 <CardContent className="space-y-4">
                   {hasOAuth && (
                     <div className="space-y-3">
@@ -180,6 +192,8 @@ export default function RegisterPage() {
                       placeholder="Your name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      autoComplete="name"
+                      enterKeyHint="next"
                       required
                       disabled={isLoading}
                     />
@@ -192,6 +206,11 @@ export default function RegisterPage() {
                       placeholder="you@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      inputMode="email"
+                      spellCheck={false}
                       required
                       disabled={isLoading}
                     />
@@ -204,6 +223,8 @@ export default function RegisterPage() {
                       placeholder="Min. 8 characters"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                      enterKeyHint="done"
                       required
                       minLength={8}
                       disabled={isLoading}
@@ -228,7 +249,7 @@ export default function RegisterPage() {
                   </Button>
                   <p className="text-sm text-muted-foreground text-center">
                     {t("hasAccount")}{" "}
-                    <Link href="/login" className="text-primary hover:underline">
+                    <Link href={loginHref} className="text-primary hover:underline">
                       {t("signIn")}
                     </Link>
                   </p>
@@ -282,7 +303,7 @@ export default function RegisterPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </main>
         </div>
       </div>
     </div>

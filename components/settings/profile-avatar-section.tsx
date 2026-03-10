@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { AVATAR_MAX_SIZE_BYTES, AVATAR_ALLOWED_TYPES } from "@/lib/types/profile";
 
 const MAX_MB = 5;
-const ALLOWED_EXT = "jpg, png, webp";
+const ALLOWED_EXT = "jpg, png, webp, avif, heic";
 
 interface ProfileAvatarSectionProps {
   avatarUrl: string | null;
@@ -42,21 +42,43 @@ export function ProfileAvatarSection({
     : "?";
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     if (!file) return;
     setError(null);
 
-    if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
-      setError(`Invalid type. Use ${ALLOWED_EXT}.`);
-      return;
-    }
-    if (file.size > AVATAR_MAX_SIZE_BYTES) {
-      setError(`Max ${MAX_MB}MB.`);
-      return;
-    }
-
     setUploading(true);
     try {
+      const name = file.name.toLowerCase();
+      const isHeic =
+        file.type === "image/heic" ||
+        file.type === "image/heif" ||
+        name.endsWith(".heic") ||
+        name.endsWith(".heif");
+
+      if (isHeic) {
+        try {
+          const mod = await import("heic2any");
+          const heic2any = (mod as unknown as { default: (opts: unknown) => Promise<Blob | Blob[]> }).default;
+          const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+          const blob = Array.isArray(converted) ? converted[0] : converted;
+          file = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+            type: blob.type || "image/jpeg",
+          });
+        } catch {
+          setError("Couldn’t convert this HEIC photo. Please export as JPG or PNG and try again.");
+          return;
+        }
+      }
+
+      if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
+        setError(`Invalid type. Use ${ALLOWED_EXT}.`);
+        return;
+      }
+      if (file.size > AVATAR_MAX_SIZE_BYTES) {
+        setError(`Max ${MAX_MB}MB.`);
+        return;
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/profile/avatar", {
@@ -109,7 +131,7 @@ export function ProfileAvatarSection({
           <input
             ref={inputRef}
             type="file"
-            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+            accept="image/*"
             className="hidden"
             onChange={handleUpload}
             disabled={disabled || uploading}

@@ -17,25 +17,61 @@ export function parseSwimPR(inputText: string): SwimPR | null {
   const t = inputText.trim();
   const lower = t.toLowerCase();
 
-  // Distance first: 200m, 400m, 800m, 1500m, etc.
-  const distMatch = lower.match(/\b(\d{2,4})\s*m\b/);
-  if (!distMatch) return null;
-  const distanceM = parseInt(distMatch[1], 10);
-  if (distanceM < 50 || distanceM > 5000) return null;
+  const distances = [...lower.matchAll(/\b(\d{2,4})\s*m\b/g)]
+    .map((match) => ({
+      distanceM: parseInt(match[1], 10),
+      index: match.index ?? -1,
+    }))
+    .filter((item) => item.distanceM >= 50 && item.distanceM <= 5000);
+  if (distances.length === 0) return null;
 
-  // Time: 4:40, 4m40s, 4 min 40, 280 sec
-  const minSec = t.match(/(\d+)\s*[:m]\s*(\d+)\s*(?:s|sec|min)?/i);
-  if (minSec) {
-    const min = parseInt(minSec[1], 10);
-    const sec = parseInt(minSec[2], 10);
+  const timeCandidates: Array<{ timeSec: number; index: number }> = [];
+  for (const match of t.matchAll(/(\d+)\s*[:m]\s*(\d+)\s*(?:s|sec|min)?/gi)) {
+    const min = parseInt(match[1], 10);
+    const sec = parseInt(match[2], 10);
     if (sec >= 0 && sec < 60) {
-      return { distanceM, timeSec: min * 60 + sec };
+      timeCandidates.push({ timeSec: min * 60 + sec, index: match.index ?? -1 });
     }
   }
-  const secOnly = t.match(/\b(\d{2,4})\s*(?:s|sec|seconds?)\b/i);
-  if (secOnly) {
-    const timeSec = parseInt(secOnly[1], 10);
-    if (timeSec > 0 && timeSec < 7200) return { distanceM, timeSec };
+  for (const match of t.matchAll(/\b(\d{2,4})\s*(?:s|sec|seconds?)\b/gi)) {
+    const timeSec = parseInt(match[1], 10);
+    if (timeSec > 0 && timeSec < 7200) {
+      timeCandidates.push({ timeSec, index: match.index ?? -1 });
+    }
+  }
+
+  const prKeywords = /\b(pr|pb|best)\b/i;
+  let best: { distanceM: number; timeSec: number; gap: number; hasKeyword: boolean } | null = null;
+
+  for (const time of timeCandidates) {
+    for (const distance of distances) {
+      const gap = Math.abs(time.index - distance.index);
+      if (gap > 24) continue;
+
+      const start = Math.max(0, Math.min(time.index, distance.index) - 8);
+      const end = Math.min(lower.length, Math.max(time.index, distance.index) + 24);
+      const window = lower.slice(start, end);
+      const hasKeyword = prKeywords.test(window);
+
+      if (!hasKeyword && gap > 12) continue;
+
+      if (
+        !best ||
+        Number(hasKeyword) > Number(best.hasKeyword) ||
+        (hasKeyword === best.hasKeyword && gap < best.gap)
+      ) {
+        best = {
+          distanceM: distance.distanceM,
+          timeSec: time.timeSec,
+          gap,
+          hasKeyword,
+        };
+      }
+    }
+  }
+
+  if (best) {
+    return { distanceM: best.distanceM, timeSec: best.timeSec };
   }
   return null;
 }
@@ -69,38 +105,46 @@ export function ensureExactTotalMeters(
   descriptionMd: string,
   targetMeters: number
 ): string {
-  const computed = parseSwimMetersFromText(descriptionMd);
+  const hasClaimedTotal = getClaimedTotalMeters(descriptionMd) != null;
+  const withoutClaimedTotal = descriptionMd
+    .replace(/^\s*TOTAL\s*METERS?\s*:\s*\d+\s*$/gim, "")
+    .replace(/^\s*TOTAL\s*:\s*\d+\s*m\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const computed = parseSwimMetersFromText(withoutClaimedTotal);
   if (computed == null) return descriptionMd;
   const diff = computed - targetMeters;
   if (diff === 0) return descriptionMd;
+  const withClaimedTotal = (text: string): string =>
+    hasClaimedTotal ? `${text.replace(/\s+$/g, "")}\nTOTAL METERS: ${targetMeters}` : text;
 
   // Reduce: replace one occurrence to remove exactly diff (no visible "correction" text)
   if (diff > 0 && diff <= 500) {
-    let out = descriptionMd;
+    let out = withoutClaimedTotal;
     if (diff === 100 && /\d+\s*[x×*]\s*100\s*m?\b/i.test(out)) {
       out = out.replace(/(\d+)\s*[x×*]\s*100\s*m?\b/i, (_, n) => {
         const r = parseInt(n, 10);
         return r > 1 ? `${r - 1}×100m` : `${n}×100m`;
       });
-      if (parseSwimMetersFromText(out) === targetMeters) return out;
+      if (parseSwimMetersFromText(out) === targetMeters) return withClaimedTotal(out);
     }
     if (diff === 200) {
       if (/200\s*m?\b/i.test(out)) {
         out = out.replace(/200\s*m?\b/i, "100m");
-        if (parseSwimMetersFromText(out) === targetMeters) return out;
+        if (parseSwimMetersFromText(out) === targetMeters) return withClaimedTotal(out);
       }
-      out = descriptionMd;
+      out = withoutClaimedTotal;
       if (/(\d+)\s*[x×*]\s*100\s*m?\b/i.test(out)) {
         out = out.replace(/(\d+)\s*[x×*]\s*100\s*m?\b/i, (_, n) => {
           const r = parseInt(n, 10);
           return r >= 2 ? `${r - 2}×100m` : `${n}×100m`;
         });
-        if (parseSwimMetersFromText(out) === targetMeters) return out;
+        if (parseSwimMetersFromText(out) === targetMeters) return withClaimedTotal(out);
       }
     }
-    if (diff === 400 && /400\s*m?\b/i.test(descriptionMd)) {
-      out = descriptionMd.replace(/400\s*m?\b/i, "200m");
-      if (parseSwimMetersFromText(out) === targetMeters) return out;
+    if (diff === 400 && /400\s*m?\b/i.test(withoutClaimedTotal)) {
+      out = withoutClaimedTotal.replace(/400\s*m?\b/i, "200m");
+      if (parseSwimMetersFromText(out) === targetMeters) return withClaimedTotal(out);
     }
   }
 
@@ -108,8 +152,8 @@ export function ensureExactTotalMeters(
   if (diff < 0 && -diff <= 400) {
     const toAdd = -diff;
     if (toAdd % 50 === 0) {
-      const appended = `${descriptionMd}\n- ${toAdd}m easy`;
-      if (parseSwimMetersFromText(appended) === targetMeters) return appended;
+      const appended = `${withoutClaimedTotal}\n- ${toAdd}m easy`;
+      if (parseSwimMetersFromText(appended) === targetMeters) return withClaimedTotal(appended);
     }
   }
 

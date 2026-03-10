@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +10,13 @@ import {
   ChevronRight,
   Sparkles,
 } from "lucide-react";
+import {
+  getAdaptivePlannerDecisionMeta,
+} from "@/lib/product/adaptive-day-planner-ui";
+import {
+  getTodayDecisionGeneratedLabel,
+  getTodayDecisionStaleBadgeCopy,
+} from "@/lib/product/today-decision-staleness";
 import { cn } from "@/lib/utils";
 import type { PremiumCheckinResult } from "@/lib/actions/daily-checkin";
 
@@ -83,6 +91,10 @@ export function DailyCheckinInline({
       onOpenCheckin();
     }
   };
+  const plannerTime = getTodayDecisionGeneratedLabel({
+    generatedAt: checkin?.plannerGeneratedAt,
+    cached: true,
+  });
 
   return (
     <div
@@ -142,6 +154,12 @@ export function DailyCheckinInline({
                     })}
                   </span>
                 )}
+                {plannerTime ? <span>{plannerTime}</span> : null}
+                {checkin.plannerStale ? (
+                  <span className="text-amber-300">
+                    {getTodayDecisionStaleBadgeCopy(checkin.plannerStaleReason)}
+                  </span>
+                ) : null}
                 {onExplain && (
                   <button
                     type="button"
@@ -179,15 +197,20 @@ export function DailyCheckinInline({
 
 interface ConflictBannerProps {
   conflictReason: string;
+  previewSummary?: string | null;
+  plannerDecision?: PremiumCheckinResult["plannerDecision"];
   onReview: () => void;
   className?: string;
 }
 
 export function ConflictBanner({
   conflictReason,
+  previewSummary,
+  plannerDecision,
   onReview,
   className,
 }: ConflictBannerProps) {
+  const decisionMeta = getAdaptivePlannerDecisionMeta(plannerDecision);
   return (
     <div
       className={cn(
@@ -200,11 +223,16 @@ export function ConflictBanner({
           <Sparkles className="h-3.5 w-3.5 text-amber-400" />
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-foreground">
-            Coach suggests a safer option
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-foreground">
+              Today&apos;s adaptation
+            </p>
+            <Badge variant={decisionMeta.variant} className="text-2xs px-1.5 py-0">
+              {decisionMeta.label}
+            </Badge>
+          </div>
           <p className="text-2xs text-muted-foreground/80 truncate">
-            {conflictReason}
+            {previewSummary || conflictReason}
           </p>
         </div>
       </div>

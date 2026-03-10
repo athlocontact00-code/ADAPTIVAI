@@ -8,6 +8,7 @@ import { stringifyStructuredWorkoutPlan } from "@/lib/plans/compat";
 import { exportStructuredToText } from "@/lib/plans/format";
 import { isWorkoutLocked, type PlanRigiditySetting } from "@/lib/services/plan-rigidity.service";
 import { createPlanChangeProposal, type ProposalPatch } from "@/lib/actions/plan-rigidity";
+import { invalidateAdaptiveDayPlannerCacheForWorkoutDate } from "@/lib/services/adaptive-day-planner-cache.service";
 
 type BenchmarksRow = {
   swimCssSecPer100: number | null;
@@ -228,9 +229,11 @@ export async function applyCoachWorkoutPlan(params: {
       source: "coach",
     },
   });
+  await invalidateAdaptiveDayPlannerCacheForWorkoutDate(userId, workout.date);
 
   revalidatePath("/calendar");
   revalidatePath("/dashboard");
+  revalidatePath("/today");
 
   return { ok: true, applied: "UPDATED" };
 }

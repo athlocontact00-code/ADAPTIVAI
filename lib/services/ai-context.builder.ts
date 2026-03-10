@@ -37,6 +37,14 @@ export type AIContext = {
     availability: Record<string, unknown> | null;
     preferences: Record<string, unknown> | null;
     guardrails: Record<string, unknown> | null;
+    activeInjuries: Array<{
+      area: string;
+      severity: string;
+      status: string;
+      startedAt: string;
+      endedAt: string | null;
+      notesPresent: boolean;
+    }>;
   };
   zones: {
     hr: {
@@ -342,7 +350,7 @@ export async function buildAIContextForUser(userId: string): Promise<AIContext> 
   const start14 = startOfLocalDay(addDays(generatedAt, -13));
   const next7EndExclusive = endExclusiveOfLocalDay(addDays(generatedAt, 7));
 
-  const [user, profile, activeSeason, blocks, races, pbs, keySessions, completed14d, checkIns7d, feedback14d, diary7d, metrics14d] =
+  const [user, profile, activeSeason, blocks, races, pbs, keySessions, completed14d, checkIns7d, feedback14d, diary7d, metrics14d, injuryEvents] =
     await Promise.all([
       db.user.findUnique({
         where: { id: userId },
@@ -474,7 +482,7 @@ export async function buildAIContextForUser(userId: string): Promise<AIContext> 
         },
       }),
       db.postWorkoutFeedback.findMany({
-        where: { userId, visibleToAI: true, createdAt: { gte: start14 } },
+        where: { userId, visibleToAI: true, visibleToFuturePlanning: true, createdAt: { gte: start14 } },
         orderBy: { createdAt: "desc" },
         take: 200,
         select: {
@@ -514,6 +522,22 @@ export async function buildAIContextForUser(userId: string): Promise<AIContext> 
           ctl: true,
           atl: true,
           tsb: true,
+        },
+      }),
+      db.injuryEvent.findMany({
+        where: {
+          userId,
+          OR: [{ status: "ACTIVE" }, { endDate: { gte: start14 } }],
+        },
+        orderBy: [{ status: "asc" }, { startDate: "desc" }],
+        take: 10,
+        select: {
+          area: true,
+          severity: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          notes: true,
         },
       }),
     ]);
@@ -657,6 +681,14 @@ export async function buildAIContextForUser(userId: string): Promise<AIContext> 
       availability: (profile as { availability?: Record<string, unknown> | null })?.availability ?? null,
       preferences: (profile as { preferences?: Record<string, unknown> | null })?.preferences ?? null,
       guardrails: (profile as { guardrails?: Record<string, unknown> | null })?.guardrails ?? null,
+      activeInjuries: injuryEvents.map((injury) => ({
+        area: injury.area,
+        severity: injury.severity,
+        status: injury.status,
+        startedAt: formatLocalDateInput(injury.startDate),
+        endedAt: injury.endDate ? formatLocalDateInput(injury.endDate) : null,
+        notesPresent: typeof injury.notes === "string" && injury.notes.trim().length > 0,
+      })),
     },
     zones: {
       hr: {

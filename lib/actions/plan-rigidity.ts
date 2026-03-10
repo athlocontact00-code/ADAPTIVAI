@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { track } from "@/lib/analytics/events";
 import { createRequestId, logError, logInfo } from "@/lib/logger";
+import { invalidateAdaptiveDayPlannerCacheForDateRange, invalidateAdaptiveDayPlannerCacheForWorkoutDate } from "@/lib/services/adaptive-day-planner-cache.service";
 import {
   type PlanRigiditySetting,
 } from "@/lib/services/plan-rigidity.service";
@@ -258,6 +259,11 @@ export async function decidePlanChangeProposal(params: {
       where: { id: workoutId },
       data,
     });
+    await invalidateAdaptiveDayPlannerCacheForDateRange(
+      session.user.id,
+      workout.date,
+      data.date instanceof Date ? data.date : workout.date
+    );
 
     await planDb.auditLog.create({
       data: {
@@ -303,6 +309,7 @@ export async function decidePlanChangeProposal(params: {
       const w = await db.workout.findUnique({ where: { id: proposal.workoutId } });
       if (w && w.userId === session.user.id && !w.planned && !w.completed && w.source === "coach_proposal") {
         await db.workout.delete({ where: { id: w.id } });
+        await invalidateAdaptiveDayPlannerCacheForWorkoutDate(session.user.id, w.date);
       }
     }
 

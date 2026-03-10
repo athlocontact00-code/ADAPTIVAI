@@ -141,9 +141,29 @@ HARDENING_USER_ID=<valid-user-id> npm run hardening:checks
 
 **Required env var:** `HARDENING_USER_ID` – ID of a real user for validation. Add to CI secrets if running hardening in automation, or run manually before releases. The main CI workflow does **not** run hardening by default; use the optional manual workflow if needed.
 
+Adaptive planner freshness is protected by a dedicated CI check: `planner-regression`. Run `npm run test:planner-regression` locally when changing planner cache freshness, invalidation, `today-decision`, stale recommendation copy/badges, shared planner status headers, launcher freshness summaries, premium check-in or conflict review freshness UI, check-in result handoff after auto-apply/undo, shared plan adaptation copy across check-in/conflict/coach flows, shared proposal review loop via Calendar deep links, Calendar proposal review context headers, Calendar URL cleanup after proposal decisions, Calendar proposal review state helpers, Calendar page server-side proposal resolution, pending coach change visibility across Coach/Dashboard/Calendar, coach suggestion handoff into Calendar review context, coach review context cleanup after Calendar actions, coach review target cleanup after Coach actions, shared coach review copy/CTA labels, shared coach review outcome copy, next-step CTA after coach review resolution, resolved coach review handoff back into Coach, resolved coach review handoff into Dashboard, or check-in driven workout adaptation. See `docs/PLANNER_REGRESSION_SUITE.md`.
+
+Coach planning quality is protected by a separate CI check: `coach-planning-regression`. Run `npm run test:coach-planning-regression` locally when changing coach prescription logic, coach calendar insert flows, or coach-applied workout plan updates. See `docs/COACH_PLANNING_REGRESSION_SUITE.md`.
+
+Coach prompt quality is protected by `coach-prompts-regression`. Run `npm run test:coach-prompts-regression` locally when changing coach prompt templates, intent-to-prompt constraints, swim PR pace injection, or compact context shaping. See `docs/COACH_PROMPTS_REGRESSION_SUITE.md`.
+
+Coach output/parser quality is protected by `coach-output-regression`. Run `npm run test:coach-output-regression` locally when changing save-to-calendar parsing, fallback workout extraction, or `calendarInsert` response normalization. See `docs/COACH_OUTPUT_REGRESSION_SUITE.md`.
+
+Coach response semantics are protected by `coach-semantics-regression`. Run `npm run test:coach-semantics-regression` locally when changing workout quality gates, required sections, sport-specific structure validation, coach correction retries, swim hard guards, swim meter auto-fix helpers, response finalization logic, response envelope/meta shaping, request routing heuristics, manual add workout orchestration, manual workout parsing, lightweight today/plan response handlers, deterministic fallback behavior, workout creation assembly, or shared coach chat utilities in coach replies and auto-save JSON flows. See `docs/COACH_SEMANTICS_REGRESSION_SUITE.md`.
+
+AI memory/context quality is protected by `memory-context-regression`. Run `npm run test:memory-context-regression` locally when changing AI memory aggregation, visibility filtering, or privacy rules in AI context building. See `docs/MEMORY_CONTEXT_REGRESSION_SUITE.md`.
+
+Rule of thumb:
+- `planner-regression` protects recommendation freshness and invalidation.
+- `coach-planning-regression` protects workout generation, prescription quality, and coach plan application flows.
+- `coach-prompts-regression` protects coach prompt construction, intent constraints, and prompt compactness/privacy hardening.
+- `coach-output-regression` protects coach response parsing, save-to-calendar contracts, and fallback workout extraction.
+- `coach-semantics-regression` protects the actual structure and training usefulness of coach workout replies.
+- `memory-context-regression` protects privacy filtering and visibility-aware AI context shaping.
+
 ## Production Release Checklist
 
-The app is **release-ready (100/100)**: Sentry monitoring, structured webhook logs, security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy), 33 unit tests covering billing, rate-limit, logger, structured error logging (coach, billing), Node.js engines pin, 0 npm audit vulnerabilities, and CI gates (lint + typecheck + test + build) are in place.
+The app is **release-ready (100/100)**: Sentry monitoring, structured webhook logs, security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy), unit coverage for billing, planner freshness, and coach prompt shaping flows, Node.js engines pin, 0 npm audit vulnerabilities, and CI gates (`planner-regression` + targeted AI regression checks + quality checks) are in place.
 
 ### Vercel env vars (required)
 
@@ -186,11 +206,17 @@ Use `/api/health` for uptime checks (Vercel Health Checks, UptimeRobot, etc.). R
 
 ### Before shipping
 
-1. `npm run ci` (lint + typecheck + build) passes
-2. `npm run test` (runs in CI)
-3. Run `hardening:checks` with `HARDENING_USER_ID` set
-4. Smoke-test auth (login/register) and locale switching
-5. Verify env vars in production
+1. `npm run ci` passes
+2. `npm run test:planner-regression` passes if planner freshness/invalidation changed
+3. `npm run test:coach-planning-regression` passes if coach planning logic changed
+4. `npm run test:coach-prompts-regression` passes if coach prompt shaping changed
+5. `npm run test:coach-output-regression` passes if coach parser/save contract changed
+6. `npm run test:coach-semantics-regression` passes if coach workout quality gates changed
+7. `npm run test:memory-context-regression` passes if AI memory/context logic changed
+8. `npm run test` passes
+9. Run `hardening:checks` with `HARDENING_USER_ID` set
+10. Smoke-test auth (login/register) and locale switching
+11. Verify env vars in production
 
 ## Manual Smoke Checklist (New Features)
 
@@ -262,6 +288,18 @@ Po wdrożeniu nowej wersji ikon (np. po `npm run pwa:icons` i deployu) ikona na 
 | `npm run ci` | CI gates: lint + typecheck + test + build |
 | `npm run smoke` | Lightweight smoke: typecheck + build (verifies core pages compile) |
 | `npm run test` | Run unit tests (entitlements, subscription mapper, checkout-prices, rate-limit, logger) |
+| `npm run test:coach-planning-regression` | Run coach planning and prescription regression suite |
+| `npm run test:coach-planning-regression:watch` | Watch coach planning and prescription regression suite |
+| `npm run test:coach-output-regression` | Run coach output parsing and save-to-calendar regression suite |
+| `npm run test:coach-output-regression:watch` | Watch coach output parsing and save-to-calendar regression suite |
+| `npm run test:coach-prompts-regression` | Run coach prompt shaping regression suite |
+| `npm run test:coach-prompts-regression:watch` | Watch coach prompt shaping regression suite |
+| `npm run test:coach-semantics-regression` | Run coach workout semantics and quality gate regression suite |
+| `npm run test:coach-semantics-regression:watch` | Watch coach workout semantics and quality gate regression suite |
+| `npm run test:memory-context-regression` | Run AI memory and context privacy regression suite |
+| `npm run test:memory-context-regression:watch` | Watch AI memory and context privacy regression suite |
+| `npm run test:planner-regression` | Run Adaptive Day Planner freshness/invalidation regression suite |
+| `npm run test:planner-regression:watch` | Watch planner freshness/invalidation regression suite |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript check (no emit) |
 | `npm run hardening:checks` | Pre-launch privacy/entitlement checks (requires HARDENING_USER_ID) |
@@ -278,6 +316,12 @@ Po wdrożeniu nowej wersji ikon (np. po `npm run pwa:icons` i deployu) ikona na 
 | `npm run cap:open:android` | Open Android project in Android Studio. |
 
 See [docs/CAPACITOR_AND_STORE.md](docs/CAPACITOR_AND_STORE.md) for Capacitor setup, production URL, deep links, and store submission checklists.
+
+See [docs/COACH_PLANNING_REGRESSION_SUITE.md](docs/COACH_PLANNING_REGRESSION_SUITE.md) for the dedicated coach planning regression gate.
+
+See [docs/MEMORY_CONTEXT_REGRESSION_SUITE.md](docs/MEMORY_CONTEXT_REGRESSION_SUITE.md) for the dedicated AI memory/context regression gate.
+
+See [docs/PLANNER_REGRESSION_SUITE.md](docs/PLANNER_REGRESSION_SUITE.md) for the dedicated Adaptive Day Planner regression gate.
 
 ## Manual QA checklist (web + PWA)
 

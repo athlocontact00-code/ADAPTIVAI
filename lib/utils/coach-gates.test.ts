@@ -3,6 +3,7 @@ import {
   detectSportInResponse,
   validateSportCorrectness,
   validateSwimMetersCompleteness,
+  validateWorkoutStructure,
   deriveExpectedSport,
 } from "./coach-gates";
 
@@ -54,6 +55,67 @@ describe("validateSwimMetersCompleteness", () => {
 
   it("invalid when no distances", () => {
     expect(validateSwimMetersCompleteness("Easy swim, focus on technique.")).toBe(false);
+  });
+});
+
+describe("validateWorkoutStructure", () => {
+  it("accepts a complete swim workout with sections, meters, targets, and rest", () => {
+    const result = validateWorkoutStructure(`TITLE: Threshold Swim
+SPORT: SWIM
+WARM-UP:
+400m easy
+
+MAIN SET:
+10x100m at threshold pace, rest 20s
+
+COOL-DOWN:
+200m easy
+
+TOTAL METERS: 1600
+TARGETS:
+RPE 7`, "SWIM");
+    expect(result.valid).toBe(true);
+    expect(result.missing).toEqual([]);
+  });
+
+  it("flags missing swim structure and targets", () => {
+    const result = validateWorkoutStructure("Easy swim today, focus on feel for water.", "SWIM");
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain("warm-up");
+    expect(result.missing).toContain("main set");
+    expect(result.missing).toContain("cool-down");
+    expect(result.missing).toContain("explicit swim meters");
+  });
+
+  it("accepts a run workout with warm-up, main set, cool-down, and intensity", () => {
+    const result = validateWorkoutStructure(`Warm-up 15 min easy.
+Main set: 4x5 min at threshold pace, 2 min jog.
+Cool-down 10 min easy.
+Targets: pace 4:25/km, RPE 7.`, "RUN");
+    expect(result.valid).toBe(true);
+  });
+
+  it("requires core and sets x reps for strength", () => {
+    const result = validateWorkoutStructure(`WARM-UP:
+5 min bike
+
+MAIN SET:
+3x8 goblet squat, 75s rest, RPE 7
+
+CORE:
+dead bug 3x8/side
+
+COOL-DOWN:
+mobility`, "STRENGTH");
+    expect(result.valid).toBe(true);
+  });
+
+  it("flags incomplete strength workouts", () => {
+    const result = validateWorkoutStructure("Strength session. Do some lifting.", "STRENGTH");
+    expect(result.valid).toBe(false);
+    expect(result.missing).toContain("core section");
+    expect(result.missing).toContain("sets x reps");
+    expect(result.missing).toContain("RPE/tempo/rest cues");
   });
 });
 

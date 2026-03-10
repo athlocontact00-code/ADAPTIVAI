@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Workout } from "@prisma/client";
 import { DailyCheckInModal } from "@/components/daily-checkin-modal";
@@ -48,6 +48,7 @@ import { cn, formatLocalDateInput } from "@/lib/utils";
 import { applyDeloadWeek } from "@/lib/actions/decision";
 import { getDailyInsightExplanation } from "@/lib/actions/insight-explanation";
 import { parseWorkoutPlanJson } from "@/lib/plans/compat";
+import { getDailyFlowCopy, type DailyFlowStage } from "@/lib/product/daily-flow";
 import type {
   PremiumCheckinResult,
   TodayPremiumCheckinPayload,
@@ -66,7 +67,19 @@ import {
   CheckinModal,
   ConflictReviewDrawer,
 } from "@/components/dashboard";
-import { TodayDecisionSheet } from "@/components/today-decision-sheet";
+import {
+  TodayDecisionSheet,
+  type TodayDecisionPayload,
+  type TodayDecisionSnapshot,
+} from "@/components/today-decision-sheet";
+import { TodayDecisionInlineStatus } from "@/components/today-decision-inline-status";
+import { PendingCoachChangesBanner } from "@/components/coach/pending-coach-changes-banner";
+import { ResolvedCoachReviewBanner } from "@/components/dashboard/resolved-coach-review-banner";
+import { getTodayDecisionStaleBadgeCopy } from "@/lib/product/today-decision-staleness";
+import { getPlanAdaptationReviewHref } from "@/lib/product/plan-adaptation-ui";
+import type { CoachPendingChangeSummary } from "@/lib/product/coach-pending-changes";
+import type { ResolvedCoachReviewSummary } from "@/lib/services/resolved-coach-review.service";
+import { clearCoachReviewContextUrl } from "@/lib/product/coach-review-context";
 
 import {
   ActionCard,
@@ -159,6 +172,16 @@ interface DashboardClientProps {
     userAccepted: boolean | null;
   } | null;
   premiumCheckin: TodayPremiumCheckinPayload;
+  initialTodayDecision?: {
+    decision: TodayDecisionPayload;
+    cached: boolean;
+    stale?: boolean;
+    staleReason?: "CHECKIN_UPDATED" | "WORKOUT_UPDATED" | null;
+    changedAt?: string | null;
+    date: string;
+  } | null;
+  coachPendingChanges?: CoachPendingChangeSummary | null;
+  resolvedCoachReview?: ResolvedCoachReviewSummary | null;
   retentionSummary?: DashboardRetentionSummary;
   quote?: DailyQuoteResult | null;
   latestDigest?: {
@@ -183,12 +206,16 @@ export function DashboardClientV2({
   checkInWorkout,
   todayCheckIn,
   premiumCheckin,
+  initialTodayDecision,
+  coachPendingChanges,
+  resolvedCoachReview,
   retentionSummary,
   quote,
   latestDigest,
 }: DashboardClientProps) {
   const { compact, setCompact } = useCompactMode();
   const density = compact ? "compact" : "default";
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [isApplyingDeload, setIsApplyingDeload] = useState(false);
@@ -208,8 +235,14 @@ export function DashboardClientV2({
   const [explainOpen, setExplainOpen] = useState(false);
   const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false);
   const [todayDecisionOpen, setTodayDecisionOpen] = useState(false);
+  const [plannerRefreshKey, setPlannerRefreshKey] = useState(0);
+  const [todayDecisionData, setTodayDecisionData] = useState<TodayDecisionSnapshot | null>(initialTodayDecision ?? null);
+  const [resolvedCoachReviewState, setResolvedCoachReviewState] = useState<ResolvedCoachReviewSummary | null>(
+    resolvedCoachReview ?? null
+  );
+  const showOnboardingWelcome = searchParams?.get("fromOnboarding") === "1";
   useEffect(() => {
-    if (searchParams.get("whatToday") === "1") {
+    if (searchParams?.get("whatToday") === "1") {
       setTodayDecisionOpen(true);
     }
   }, [searchParams]);
@@ -222,6 +255,21 @@ export function DashboardClientV2({
     });
   }, [premiumCheckin]);
 
+  useEffect(() => {
+    setTodayDecisionData(initialTodayDecision ?? null);
+  }, [initialTodayDecision]);
+
+  useEffect(() => {
+    setResolvedCoachReviewState(resolvedCoachReview ?? null);
+  }, [resolvedCoachReview]);
+  const dismissResolvedCoachReview = useCallback(() => {
+    setResolvedCoachReviewState(null);
+    if (typeof window !== "undefined") {
+      router.replace(clearCoachReviewContextUrl(window.location.href));
+    }
+  }, [router]);
+
+
   const [insightExplainOpen, setInsightExplainOpen] = useState(false);
   const [insightExplainLoading, setInsightExplainLoading] = useState(false);
   const [insightExplainError, setInsightExplainError] = useState<string | null>(null);
@@ -231,11 +279,20 @@ export function DashboardClientV2({
     sources: Array<{ type: string; id: string; date: string; snippet: string }>;
   }>(null);
 
+  const refreshPlanner = () => setPlannerRefreshKey((value) => value + 1);
+
   const handleCheckinSaved = (result: PremiumCheckinResult) => {
     setPremiumCheckinState({ status: "completed", data: result, error: null });
+    refreshPlanner();
+    router.refresh();
   };
 
-  const handleConflictResolved = () => {
+  const handleConflictResolved = (proposalId?: string) => {
+    if (proposalId) {
+      setConflictDrawerOpen(false);
+      router.push(getPlanAdaptationReviewHref({ proposalId }));
+      return;
+    }
     setPremiumCheckinState((prev) => ({
       ...prev,
       data: prev.data
@@ -243,6 +300,8 @@ export function DashboardClientV2({
         : prev.data,
     }));
     setConflictDrawerOpen(false);
+    refreshPlanner();
+    router.refresh();
   };
 
   const nextAction = retentionSummary?.nextAction;
@@ -379,6 +438,8 @@ export function DashboardClientV2({
       const result = await applyDeloadWeek(formatLocalDateInput(today));
       if (result.success) {
         toast.success("Deload Applied", { description: result.message });
+        refreshPlanner();
+        router.refresh();
       } else {
         toast.error("Failed to apply deload", { description: result.error });
       }
@@ -389,20 +450,24 @@ export function DashboardClientV2({
     }
   }
 
-  const heroSubtitle = (() => {
+  const flowStage = (() => {
     const kind = nextAction?.kind;
-    if (kind === "COMPLETE_CHECKIN_OR_SKIP") return "Complete your daily check-in for personalized recommendations.";
-    if (kind === "ADD_FEEDBACK") return "Log feedback for your last workout.";
-    if (kind === "START_WORKOUT") return nextAction?.subtitle || "Ready for today's workout.";
-    if (kind === "DO_CHECKIN") return "Review your plan and complete check-in.";
-    return "Plan your next training session.";
-  })();
+    if (kind === "ADD_FEEDBACK") return "FEEDBACK_REQUIRED";
+    if (kind === "COMPLETE_CHECKIN_OR_SKIP") return "CHECKIN_REQUIRED";
+    if (kind === "START_WORKOUT") return "READY_TO_TRAIN";
+    if (kind === "PLAN_WORKOUT" && nextAction?.workout?.completed) return "DAY_COMPLETE";
+    return "NO_PLAN";
+  })() satisfies DailyFlowStage;
+
+  const flowCopy = getDailyFlowCopy(flowStage, {
+    workoutTitle: nextAction?.workout?.title ?? checkInWorkout?.title ?? recentWorkouts[0]?.title ?? null,
+    checkInDecision: todayCheckIn?.aiDecision,
+  });
 
   const heroCta = (() => {
-    const kind = nextAction?.kind;
-    if (kind === "COMPLETE_CHECKIN_OR_SKIP" || kind === "DO_CHECKIN") {
+    if (flowStage === "CHECKIN_REQUIRED") {
       return {
-        label: "Open Check-in",
+        label: todayCheckIn ? "View check-in" : "Open check-in",
         onClick: () => {
           if (!checkInWorkout) {
             toast.error("No workout found", { description: "Plan a workout in Calendar first" });
@@ -412,9 +477,9 @@ export function DashboardClientV2({
         },
       };
     }
-    if (kind === "ADD_FEEDBACK") {
+    if (flowStage === "FEEDBACK_REQUIRED") {
       return {
-        label: "Add Feedback",
+        label: "Add feedback",
         onClick: () => {
           if (!nextAction?.workout?.id || !nextAction?.workout?.title) {
             toast.error("Unable to open feedback");
@@ -425,15 +490,18 @@ export function DashboardClientV2({
         },
       };
     }
-    if (kind === "START_WORKOUT") {
+    if (flowStage === "READY_TO_TRAIN") {
       return {
-        label: "View Workout",
+        label: "Open workout",
         href: nextAction?.workout?.id
           ? `/calendar?workoutId=${encodeURIComponent(nextAction.workout.id)}`
           : "/calendar",
       };
     }
-    return { label: "Plan Workout", href: "/calendar" };
+    if (flowStage === "DAY_COMPLETE") {
+      return { label: "Open weekly digest", href: latestDigest ? `/digest?id=${latestDigest.id}` : "/digest" };
+    }
+    return { label: "Plan workout", href: "/calendar" };
   })();
 
   const openPremiumCheckin = () => setShowPremiumCheckinModal(true);
@@ -492,9 +560,24 @@ export function DashboardClientV2({
       {conflictActive && checkinData?.conflictReason && checkinData.suggestedChange && (
         <ConflictBanner
           conflictReason={checkinData.conflictReason}
+          previewSummary={checkinData.plannerPatchPreview?.summary ?? null}
+          plannerDecision={checkinData.plannerDecision}
           onReview={() => setConflictDrawerOpen(true)}
         />
       )}
+
+      {coachPendingChanges ? (
+        <PendingCoachChangesBanner summary={coachPendingChanges} className="w-full" compact showCalendarLink />
+      ) : null}
+
+      {resolvedCoachReviewState ? (
+        <ResolvedCoachReviewBanner
+          review={resolvedCoachReviewState}
+          isToday={resolvedCoachReviewState.contextDate === new Date().toISOString().slice(0, 10)}
+          onOpenTodayDecision={() => setTodayDecisionOpen(true)}
+          onDismiss={dismissResolvedCoachReview}
+        />
+      ) : null}
 
       {checkinError && (
         <div className="rounded-control border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
@@ -631,6 +714,22 @@ export function DashboardClientV2({
         </div>
       </div>
 
+      {showOnboardingWelcome && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold">Your first plan is ready.</div>
+              <div className="text-sm text-muted-foreground">
+                Start here to review today&apos;s priority, then open `Today` when you are ready to execute.
+              </div>
+            </div>
+            <Link href="/today" className="shrink-0">
+              <Button size="sm">Open Today</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════
           A) MOBILE: above-the-fold = Today + Readiness only. TABLET/DESKTOP: 2-col (md) / 12-col (lg)
       ═══════════════════════════════════════════════════════════════════ */}
@@ -639,15 +738,22 @@ export function DashboardClientV2({
         <div className="md:col-span-1 lg:col-span-8 order-1">
           <ActionCard
             title="Today"
-            subtitle={heroSubtitle}
+            subtitle={flowCopy.title}
             primary={
               "onClick" in heroCta
                 ? { label: heroCta.label, onClick: heroCta.onClick! }
                 : { label: heroCta.label, href: heroCta.href ?? "/calendar" }
             }
-            secondary={{ label: "Calendar", href: "/calendar", variant: "outline" }}
+            secondary={{
+              label: flowStage === "DAY_COMPLETE" || flowStage === "FEEDBACK_REQUIRED" ? "Today" : "Calendar",
+              href: flowStage === "DAY_COMPLETE" || flowStage === "FEEDBACK_REQUIRED" ? "/today" : "/calendar",
+              variant: "outline",
+            }}
             badges={
               <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={flowCopy.badgeVariant} className="h-6 px-2">
+                  {flowCopy.badgeLabel}
+                </Badge>
                 {adaptedBadge ? (
                   <Badge variant="info" className="h-6 px-2">
                     {adaptedBadge}
@@ -665,11 +771,24 @@ export function DashboardClientV2({
                     {streaks?.workoutWeekStreak}w streak
                   </Badge>
                 ) : null}
+                {todayDecisionData?.stale ? (
+                  <Badge variant="warning" className="h-6 px-2">
+                    {getTodayDecisionStaleBadgeCopy(todayDecisionData.staleReason)}
+                  </Badge>
+                ) : null}
               </div>
             }
             density={density}
           >
             <div className="space-y-3">
+              <div className="text-sm text-foreground/90">{flowCopy.summary}</div>
+              <TodayDecisionInlineStatus
+                stale={todayDecisionData?.stale}
+                staleReason={todayDecisionData?.staleReason}
+                changedAt={todayDecisionData?.changedAt}
+                generatedAt={todayDecisionData?.decision.generatedAt}
+                cached={todayDecisionData?.cached}
+              />
               {checkinSlot}
               <Button
                 variant="outline"
@@ -684,6 +803,9 @@ export function DashboardClientV2({
           <TodayDecisionSheet
             open={todayDecisionOpen}
             onOpenChange={setTodayDecisionOpen}
+            refreshKey={plannerRefreshKey}
+            initialData={todayDecisionData}
+            onDataChange={setTodayDecisionData}
           />
         </div>
 
@@ -1277,7 +1399,11 @@ export function DashboardClientV2({
           open={showCheckInModal}
           onOpenChange={setShowCheckInModal}
           workout={checkInWorkout}
-          onComplete={() => setShowCheckInModal(false)}
+          onComplete={() => {
+            setShowCheckInModal(false);
+            refreshPlanner();
+            router.refresh();
+          }}
         />
       )}
 
@@ -1290,6 +1416,12 @@ export function DashboardClientV2({
           }}
           workoutId={feedbackWorkout.id}
           workoutTitle={feedbackWorkout.title}
+          onComplete={() => {
+            setShowFeedbackModal(false);
+            setFeedbackWorkout(null);
+            refreshPlanner();
+            router.refresh();
+          }}
         />
       )}
 
@@ -1307,6 +1439,11 @@ export function DashboardClientV2({
           checkInId={checkinData.id}
           conflictReason={checkinData.conflictReason ?? "Coach is suggesting a safer option."}
           suggestedChange={checkinData.suggestedChange}
+          plannerDecision={checkinData.plannerDecision}
+          plannerState={checkinData.plannerState}
+          plannerGeneratedAt={checkinData.plannerGeneratedAt}
+          plannerStale={checkinData.plannerStale}
+          plannerStaleReason={checkinData.plannerStaleReason}
           readinessScore={checkinData.readinessScore}
           isLocked={Boolean(checkinData.planLocked)}
           onAccepted={handleConflictResolved}

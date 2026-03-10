@@ -7,7 +7,7 @@ on:
     branches: [main, develop]
 
 jobs:
-  quality:
+  planner-regression:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: "file:./prisma/dev.db"
@@ -41,7 +41,226 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
-      - name: Run CI gates (lint, typecheck, test, build)
-        run: npm run ci
+      - name: Run planner regression suite
+        run: npm run test:planner-regression
+
+  coach-planning-regression:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run coach planning regression suite
+        run: npm run test:coach-planning-regression
+
+  coach-prompts-regression:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run coach prompt regression suite
+        run: npm run test:coach-prompts-regression
+
+  coach-output-regression:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run coach output regression suite
+        run: npm run test:coach-output-regression
+
+  coach-semantics-regression:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run coach semantics regression suite
+        run: npm run test:coach-semantics-regression
+
+  memory-context-regression:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run memory/context regression suite
+        run: npm run test:memory-context-regression
+
+  quality:
+    runs-on: ubuntu-latest
+    needs: [planner-regression, coach-planning-regression, coach-prompts-regression, coach-output-regression, coach-semantics-regression, memory-context-regression]
+    env:
+      DATABASE_URL: "file:./prisma/dev.db"
+      DIRECT_URL: "file:./prisma/dev.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-secret-min-32-chars-long-for-test' }}
+      INTERNAL_CRON_SECRET: ${{ secrets.INTERNAL_CRON_SECRET || 'ci-internal-cron-secret-16chars' }}
+
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_PRICE_ID_PRO: ${{ secrets.STRIPE_PRICE_ID_PRO }}
+      STRIPE_PRODUCT_ID_PRO: ${{ secrets.STRIPE_PRODUCT_ID_PRO }}
+      APP_URL: ${{ secrets.APP_URL }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-ci-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run full test suite
+        run: npm run test
+
+      - name: Build application
+        run: npm run build
       # lint uses --max-warnings 999999 so warnings do not fail the job; fix warnings over time
-      

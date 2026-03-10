@@ -1,4 +1,4 @@
-import type { AIContext } from "@/lib/services/ai-context.builder";
+import { assertAIContextNoRawDiaryNotes, type AIContext } from "@/lib/services/ai-context.builder";
 import { extractCoachIntentFull, type CoachIntentResult } from "@/lib/coach/intent";
 import { parseSwimPR, computePaces } from "@/lib/coach/swim-utils";
 
@@ -111,7 +111,7 @@ export function getCoachToneFromPreference(pref: string | null): CoachTone {
 }
 
 function compactContext(context: AIContext) {
-  const truncate = (s: string | null, max = 280): string | null => {
+  const truncate = (s: string | null | undefined, max = 280): string | null => {
     if (typeof s !== "string") return null;
     const t = s.trim();
     if (t.length <= max) return t;
@@ -126,17 +126,36 @@ function compactContext(context: AIContext) {
   const prefs = (context.userProfile.preferences as Record<string, unknown> | null) ?? {};
   const avail = (context.userProfile.availability as Record<string, unknown> | null) ?? {};
   const guard = (context.userProfile.guardrails as Record<string, unknown> | null) ?? {};
+  const equipmentNotes = truncate(context.userProfile.equipmentNotes);
+  const availabilityNotes = truncate(context.userProfile.availabilityNotes);
+  const terrainNotes = truncate(context.userProfile.terrainNotes);
   const trainingDNA = {
     primarySport: context.userProfile.sportPrimary ?? null,
     experienceLevel: context.userProfile.experienceLevel ?? null,
     swimLevel: context.userProfile.swimLevel ?? (prefs.swimLevel as string | undefined) ?? null,
     constraints: {
-      time: context.userProfile.availabilityNotes ?? (avail.preferredTime as string | undefined) ?? (avail.maxMinutesPerDay != null ? `max ${avail.maxMinutesPerDay} min/day` : null) ?? null,
-      facility: context.userProfile.equipmentNotes ?? null,
-      equipment: context.userProfile.equipmentNotes ?? null,
+      time:
+        availabilityNotes ??
+        (avail.preferredTime as string | undefined) ??
+        (avail.maxMinutesPerDay != null ? `max ${avail.maxMinutesPerDay} min/day` : null) ??
+        null,
+      facility: equipmentNotes,
+      equipment: equipmentNotes,
       poolLengthM: context.userProfile.swimPoolLengthM ?? null,
     },
-    injuryRisk: (guard.injuryAreas as string | undefined) ?? (guard.avoid as string | undefined) ?? (prefs.notes as string | undefined) ?? null,
+    injuryRisk:
+      truncate(guard.injuryAreas as string | undefined) ??
+      truncate(guard.avoid as string | undefined) ??
+      truncate(prefs.notes as string | undefined) ??
+      null,
+    activeInjuries:
+      context.userProfile.activeInjuries.length > 0
+        ? context.userProfile.activeInjuries.map((injury) => ({
+            area: injury.area,
+            severity: injury.severity,
+            status: injury.status,
+          }))
+        : null,
     preference: {
       timeOfDay: (avail.preferredTime as string | undefined) ?? null,
       poolLength: context.userProfile.swimPoolLengthM ?? null,
@@ -152,9 +171,9 @@ function compactContext(context: AIContext) {
     trainingDNA,
     userProfile: {
       ...context.userProfile,
-      equipmentNotes: truncate(context.userProfile.equipmentNotes),
-      terrainNotes: truncate(context.userProfile.terrainNotes),
-      availabilityNotes: truncate(context.userProfile.availabilityNotes),
+      equipmentNotes,
+      terrainNotes,
+      availabilityNotes,
     },
     zones: context.zones,
     pbs: context.pbs.slice(0, 10),
@@ -202,6 +221,7 @@ export function buildCoachUserPrompt(params: {
   /** When provided, used for prompt injection; otherwise extracted from input. */
   intentOverride?: CoachIntentResult;
 }): string {
+  assertAIContextNoRawDiaryNotes(params.context);
   const compact = compactContext(params.context);
   const intent =
     params.intentOverride ??

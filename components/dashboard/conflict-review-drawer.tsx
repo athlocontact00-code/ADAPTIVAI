@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AdaptiveDayPlannerPreview } from "@/components/adaptive-day-planner-preview";
+import { AdaptivePlannerStatusCluster } from "@/components/adaptive-planner-status-cluster";
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,6 +20,10 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  getPlanAdaptationActionCopy,
+  getPlanAdaptationOutcomeCopy,
+} from "@/lib/product/plan-adaptation-ui";
 import {
   acceptConflictSuggestion,
   dismissConflictSuggestion,
@@ -30,6 +36,11 @@ interface ConflictReviewDrawerProps {
   checkInId: string;
   conflictReason: string;
   suggestedChange: string | null;
+  plannerDecision?: "CHECK_IN_FIRST" | "DO_THIS_WORKOUT" | "ADAPT_SESSION" | "RECOVER_AND_REPLAN" | "PLAN_NEXT";
+  plannerState?: "NO_PLAN" | "CHECK_IN_REQUIRED" | "READY" | "ADAPT" | "FEEDBACK_REQUIRED" | "COMPLETE";
+  plannerGeneratedAt?: string;
+  plannerStale?: boolean;
+  plannerStaleReason?: "CHECKIN_UPDATED" | "WORKOUT_UPDATED" | null;
   readinessScore: number;
   isLocked?: boolean;
   onAccepted?: (proposalId?: string) => void;
@@ -43,6 +54,16 @@ interface SuggestionData {
   newTitle?: string;
   durationFactor?: number;
   intensityFactor?: number;
+  patch?: {
+    date: string;
+    change: "KEEP" | "ADAPT" | "RECOVER" | "REVIEW";
+    title: string;
+    type: string;
+    durationMin?: number | null;
+    tss?: number | null;
+    before?: string | null;
+    after?: string | null;
+  };
 }
 
 function parseSuggestion(json: string | null): SuggestionData | null {
@@ -85,6 +106,11 @@ export function ConflictReviewDrawer({
   checkInId,
   conflictReason,
   suggestedChange,
+  plannerDecision,
+  plannerState,
+  plannerGeneratedAt,
+  plannerStale = false,
+  plannerStaleReason = null,
   readinessScore,
   isLocked = false,
   onAccepted,
@@ -95,12 +121,19 @@ export function ConflictReviewDrawer({
   const [error, setError] = useState<string | null>(null);
 
   const suggestion = parseSuggestion(suggestedChange);
+  const adaptationActionCopy = getPlanAdaptationActionCopy({ locked: isLocked });
+  const outcomeCopy = getPlanAdaptationOutcomeCopy({ proposalCreated: isLocked });
 
   const handleAccept = () => {
     setError(null);
     startTransition(async () => {
       const result = await acceptConflictSuggestion(checkInId);
       if (result.success) {
+        if (result.proposalId) {
+          onAccepted?.(result.proposalId);
+          onOpenChange(false);
+          return;
+        }
         setSuccess(true);
         setTimeout(() => {
           onAccepted?.(result.proposalId);
@@ -141,7 +174,7 @@ export function ConflictReviewDrawer({
         <SheetHeader className="p-5 pb-4 border-b border-border/50 shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base font-semibold">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
-            Coach Suggestion
+            Today&apos;s adaptation
           </SheetTitle>
         </SheetHeader>
 
@@ -151,12 +184,10 @@ export function ConflictReviewDrawer({
               <CheckCircle2 className="h-6 w-6 text-emerald-400" />
             </div>
             <p className="text-sm font-medium mb-1">
-              {isLocked ? "Proposal created" : "Change applied"}
+              {outcomeCopy.title}
             </p>
             <p className="text-xs text-muted-foreground">
-              {isLocked
-                ? "Review the proposal in your calendar."
-                : "Your workout has been updated."}
+              {outcomeCopy.description}
             </p>
           </div>
         ) : (
@@ -177,12 +208,22 @@ export function ConflictReviewDrawer({
                 </span>
               </div>
               <p className="text-sm font-medium">{conflictReason}</p>
+              <AdaptivePlannerStatusCluster
+                className="mt-3"
+                decision={plannerDecision}
+                state={plannerState}
+                stale={plannerStale}
+                staleReason={plannerStaleReason}
+                generatedAt={plannerGeneratedAt}
+                cached
+                changedAt={null}
+              />
             </div>
 
             {/* Proposed change */}
             {suggestion && (
               <div className="space-y-3">
-                <h4 className="text-sm font-medium">Proposed change</h4>
+                <h4 className="text-sm font-medium">Next 72h plan</h4>
                 <div className="rounded-control border border-border/50 p-4 space-y-3">
                   <div className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -197,6 +238,27 @@ export function ConflictReviewDrawer({
                       </p>
                     </div>
                   </div>
+                  <AdaptiveDayPlannerPreview
+                    preview={
+                      suggestion.patch
+                        ? {
+                            summary: suggestion.reason,
+                            horizonDays: 3,
+                            items: [
+                              {
+                                date: suggestion.patch.date,
+                                title: suggestion.patch.title,
+                                type: suggestion.patch.type,
+                                change: suggestion.patch.change,
+                                before: suggestion.patch.before ?? null,
+                                after: suggestion.patch.after ?? null,
+                              },
+                            ],
+                          }
+                        : null
+                    }
+                    className="rounded-md border border-border/50 bg-muted/20 p-3"
+                  />
                 </div>
               </div>
             )}
@@ -269,12 +331,12 @@ export function ConflictReviewDrawer({
                 {isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    {isLocked ? "Creating..." : "Applying..."}
+                    {adaptationActionCopy.applyingLabel}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4 mr-1" />
-                    {isLocked ? "Create Proposal" : "Accept"}
+                    {adaptationActionCopy.applyLabel}
                   </>
                 )}
               </Button>

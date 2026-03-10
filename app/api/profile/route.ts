@@ -91,16 +91,36 @@ function parsePreferences(v: unknown): PreferencesData | null {
     o.swimPreference === "both"
       ? o.swimPreference
       : undefined;
+  const swimLevel =
+    o.swimLevel === "beginner" ||
+    o.swimLevel === "age_group" ||
+    o.swimLevel === "advanced" ||
+    o.swimLevel === "expert"
+      ? o.swimLevel
+      : undefined;
   const notes =
     typeof o.notes === "string" && o.notes.trim()
       ? o.notes.trim()
       : undefined;
+  const enableDailyReminders =
+    typeof o.enableDailyReminders === "boolean" ? o.enableDailyReminders : undefined;
+  const enableLowReadinessAlerts =
+    typeof o.enableLowReadinessAlerts === "boolean" ? o.enableLowReadinessAlerts : undefined;
+  const enableMissedLogReminder =
+    typeof o.enableMissedLogReminder === "boolean" ? o.enableMissedLogReminder : undefined;
+  const enableWeeklyDigest =
+    typeof o.enableWeeklyDigest === "boolean" ? o.enableWeeklyDigest : undefined;
   if (
     !style &&
     hard == null &&
     !surfaceArr?.length &&
     !swim &&
-    !notes
+    !swimLevel &&
+    !notes &&
+    enableDailyReminders == null &&
+    enableLowReadinessAlerts == null &&
+    enableMissedLogReminder == null &&
+    enableWeeklyDigest == null
   )
     return null;
   return {
@@ -108,7 +128,12 @@ function parsePreferences(v: unknown): PreferencesData | null {
     ...(hard != null && { hardSessionsPerWeek: hard }),
     ...(surfaceArr?.length && { surfacePreference: surfaceArr }),
     ...(swim && { swimPreference: swim }),
+    ...(swimLevel && { swimLevel }),
     ...(notes && { notes }),
+    ...(enableDailyReminders != null && { enableDailyReminders }),
+    ...(enableLowReadinessAlerts != null && { enableLowReadinessAlerts }),
+    ...(enableMissedLogReminder != null && { enableMissedLogReminder }),
+    ...(enableWeeklyDigest != null && { enableWeeklyDigest }),
   };
 }
 
@@ -199,9 +224,60 @@ export async function PUT(req: Request) {
       data: { name: body.name ?? undefined },
     });
 
-    const availability = parseAvailability(body.availability);
-    const preferences = parsePreferences(body.preferences);
-    const guardrails = parseGuardrails(body.guardrails);
+    const hasAvailabilityInput = Object.prototype.hasOwnProperty.call(body, "availability");
+    const hasPreferencesInput = Object.prototype.hasOwnProperty.call(body, "preferences");
+    const hasGuardrailsInput = Object.prototype.hasOwnProperty.call(body, "guardrails");
+
+    const existingProfile = await db.profile.findUnique({
+      where: { userId: session.user.id },
+      select: {
+        availability: true,
+        preferences: true,
+        guardrails: true,
+      },
+    });
+
+    const availabilityPatch = parseAvailability(body.availability);
+    const preferencesPatch = parsePreferences(body.preferences);
+    const guardrailsPatch = parseGuardrails(body.guardrails);
+
+    const existingAvailability =
+      existingProfile?.availability && typeof existingProfile.availability === "object"
+        ? (existingProfile.availability as Record<string, unknown>)
+        : null;
+    const existingPreferences =
+      existingProfile?.preferences && typeof existingProfile.preferences === "object"
+        ? (existingProfile.preferences as Record<string, unknown>)
+        : null;
+    const existingGuardrails =
+      existingProfile?.guardrails && typeof existingProfile.guardrails === "object"
+        ? (existingProfile.guardrails as Record<string, unknown>)
+        : null;
+
+    const availability =
+      !hasAvailabilityInput
+        ? existingAvailability
+        : body.availability == null
+          ? null
+          : availabilityPatch == null
+            ? null
+            : { ...(existingAvailability ?? {}), ...availabilityPatch };
+    const preferences =
+      !hasPreferencesInput
+        ? existingPreferences
+        : body.preferences == null
+          ? null
+          : preferencesPatch == null
+            ? null
+            : { ...(existingPreferences ?? {}), ...preferencesPatch };
+    const guardrails =
+      !hasGuardrailsInput
+        ? existingGuardrails
+        : body.guardrails == null
+          ? null
+          : guardrailsPatch == null
+            ? null
+            : { ...(existingGuardrails ?? {}), ...guardrailsPatch };
 
     await db.profile.upsert({
       where: { userId: session.user.id },

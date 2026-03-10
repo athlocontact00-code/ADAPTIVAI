@@ -169,6 +169,61 @@ describe("generateRubricPrescription", () => {
     expect(mainText).toMatch(/[Mm]obility|[Pp]rehab|avoid load|No heavy/);
     expect(prescription.intensityTargets.rpe).toMatch(/3–4|light/);
   });
+
+  it("caps duration to maxMinutesPerDay from availability", () => {
+    const ctx: CoachBrainContext = {
+      ...minimalContext("2026-02-09"),
+      aiContext: {
+        ...minimalContext("2026-02-09").aiContext,
+        userProfile: {
+          ...minimalContext("2026-02-09").aiContext.userProfile,
+          availability: { maxMinutesPerDay: 45 },
+          preferences: {},
+          activeInjuries: [],
+        },
+      } as CoachBrainContext["aiContext"],
+    };
+    const intent = {
+      kind: "single" as const,
+      sport: "RUN" as const,
+      date: "2026-02-10",
+      addToCalendar: true,
+      createSeparate: false,
+      replaceIntent: false,
+      durationMinHint: 75,
+    };
+    const prescription = generateRubricPrescription(intent, ctx);
+    expect(prescription.durationMin).toBe(45);
+    expect(prescription.rationale).toMatch(/45 min/i);
+  });
+
+  it("uses hardSessionsPerWeek preference to keep session conservative when limit is reached", () => {
+    const base = minimalContext("2026-02-09");
+    const ctx: CoachBrainContext = {
+      ...base,
+      hardSessionsThisWeek: 1,
+      aiContext: {
+        ...base.aiContext,
+        userProfile: {
+          ...base.aiContext.userProfile,
+          availability: {},
+          preferences: { hardSessionsPerWeek: 1 },
+          activeInjuries: [],
+        },
+      } as CoachBrainContext["aiContext"],
+    };
+    const intent = {
+      kind: "single" as const,
+      sport: "RUN" as const,
+      date: "2026-02-10",
+      addToCalendar: true,
+      createSeparate: false,
+      replaceIntent: false,
+      durationMinHint: 60,
+    };
+    const prescription = generateRubricPrescription(intent, ctx);
+    expect(prescription.rationale).toMatch(/hard-session limit is 1 per week/i);
+  });
 });
 
 describe("saveWorkoutIdempotent", () => {

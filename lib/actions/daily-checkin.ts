@@ -24,6 +24,25 @@ import {
 } from "@/lib/actions/plan-rigidity";
 import { isWorkoutLocked, type PlanRigiditySetting } from "@/lib/services/plan-rigidity.service";
 import { isOpenAIAvailable } from "@/lib/services/openai-coach";
+import { buildAIContextForUser } from "@/lib/services/ai-context.builder";
+import {
+  getAdaptiveDayPlannerCacheSnapshot,
+  invalidateAdaptiveDayPlannerCacheForWorkoutDate,
+  persistAdaptiveDayPlannerCache,
+  readAdaptiveDayPlannerCache,
+} from "@/lib/services/adaptive-day-planner-cache.service";
+import {
+  buildAdaptiveDayPlanner,
+  type AdaptiveDayPlannerPayload,
+  type AdaptivePlannerPatchItem,
+  type AdaptivePlannerWorkout,
+} from "@/lib/services/adaptive-day-planner.service";
+import {
+  derivePremiumConflictSignal,
+  isAdaptivePlannerWorkoutIntense,
+  mapPlannerPatchToConflictSuggestion,
+  type PremiumConflictSuggestion,
+} from "@/lib/services/adaptive-day-planner-premium.service";
 import { addDays, formatLocalDateInput } from "@/lib/utils";
 import {
   calculatePremiumReadiness,
@@ -100,6 +119,12 @@ export type CheckInRecommendation = {
     rationale: string[];
   };
   coach_message: string;
+  planner?: {
+    decision: AdaptiveDayPlannerPayload["decision"];
+    state: AdaptiveDayPlannerPayload["state"];
+    reasons: string[];
+    patchPreview?: AdaptiveDayPlannerPayload["patchPreview"];
+  };
 };
 
 const checkInWorkoutSchema = z.object({
@@ -221,6 +246,83 @@ function buildAfterSnapshot(
   }
 
   return merged;
+}
+
+function adaptivePatchItemToSnapshot(
+  item: AdaptivePlannerPatchItem,
+  before: CheckInWorkoutSnapshot | null
+): CheckInWorkoutSnapshot | null {
+  if (!before) return null;
+
+  const after = item.after ?? "";
+  const durationMatch = after.match(/(\d+)\s*min/i);
+  const tssMatch = after.match(/(\d+)\s*TSS/i);
+
+  return {
+    ...before,
+    title: item.title || before.title,
+    type: item.type || before.type,
+    durationMin: durationMatch ? Number(durationMatch[1]) : before.durationMin ?? null,
+    tss: tssMatch ? Number(tssMatch[1]) : before.tss ?? null,
+  };
+}
+
+function mapPlannerDecisionToRecommendationType(
+  planner: AdaptiveDayPlannerPayload,
+  before: CheckInWorkoutSnapshot | null
+): CheckInRecommendationType {
+  const firstItem = planner.patchPreview?.items[0] ?? null;
+  if (planner.decision === "RECOVER_AND_REPLAN") return "rest";
+  if (planner.decision === "ADAPT_SESSION") {
+    if (firstItem?.change === "RECOVER") return "swap_session";
+    if (firstItem?.type && before?.type && firstItem.type !== before.type) return "swap_session";
+    return "reduce_volume";
+  }
+  return "keep";
+}
+
+function mergePlannerIntoRecommendation(params: {
+  planner: AdaptiveDayPlannerPayload;
+  recommendation: CheckInRecommendation | null;
+  readinessScore: number;
+  before: CheckInWorkoutSnapshot | null;
+}): CheckInRecommendation {
+  const { planner, recommendation, readinessScore, before } = params;
+  const firstItem = planner.patchPreview?.items[0] ?? null;
+  const plannerType = mapPlannerDecisionToRecommendationType(planner, before);
+  const shouldApply = planner.decision === "ADAPT_SESSION" || planner.decision === "RECOVER_AND_REPLAN";
+  const plannerAfter = firstItem ? adaptivePatchItemToSnapshot(firstItem, before) : before;
+  const hasConcreteChange = Boolean(
+    shouldApply &&
+      plannerAfter &&
+      ((plannerAfter.title ?? null) !== (before?.title ?? null) ||
+        (plannerAfter.type ?? null) !== (before?.type ?? null) ||
+        (plannerAfter.durationMin ?? null) !== (before?.durationMin ?? null) ||
+        (plannerAfter.tss ?? null) !== (before?.tss ?? null))
+  );
+
+  return {
+    readiness_score: recommendation?.readiness_score ?? readinessScore,
+    key_factors: planner.reasons.length ? planner.reasons.slice(0, 4) : recommendation?.key_factors ?? [],
+    recommendation_type: shouldApply ? plannerType : "keep",
+    explanation: planner.why,
+    changes: {
+      apply: hasConcreteChange,
+      requires_confirmation: hasConcreteChange,
+      before,
+      after: hasConcreteChange ? plannerAfter : before,
+      rationale: planner.patchPreview
+        ? [planner.patchPreview.summary, ...planner.reasons].filter(Boolean).slice(0, 4)
+        : planner.reasons.slice(0, 4),
+    },
+    coach_message: planner.action.details,
+    planner: {
+      decision: planner.decision,
+      state: planner.state,
+      reasons: planner.reasons,
+      patchPreview: planner.patchPreview ?? null,
+    },
+  };
 }
 
 async function callCheckInCoach(params: {
@@ -586,7 +688,8 @@ export async function saveCheckIn(input: SaveCheckInInput): Promise<CheckInResul
     const sevenDaysAgo = addDays(today, -6);
     const fourteenDaysAgo = addDays(today, -13);
 
-    const [todayMetrics, yesterdayMetrics, todayWorkout, profile, recentWorkouts] = await Promise.all([
+    const horizonEnd = addDays(today, 3);
+    const [todayMetrics, yesterdayMetrics, todayWorkout, profile, recentWorkouts, plannerContext, horizonWorkouts] = await Promise.all([
       db.metricDaily.findUnique({
         where: { userId_date: { userId, date: today } },
       }),
@@ -629,6 +732,24 @@ export async function saveCheckIn(input: SaveCheckInInput): Promise<CheckInResul
         },
         select: {
           id: true,
+          date: true,
+          planned: true,
+          completed: true,
+          durationMin: true,
+          tss: true,
+        },
+      }),
+      buildAIContextForUser(userId).catch(() => null),
+      db.workout.findMany({
+        where: {
+          userId,
+          date: { gte: today, lt: horizonEnd },
+        },
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          title: true,
+          type: true,
           date: true,
           planned: true,
           completed: true,
@@ -755,6 +876,48 @@ export async function saveCheckIn(input: SaveCheckInInput): Promise<CheckInResul
         error: error instanceof Error ? error.message : String(error),
       });
     }
+
+    const plannerDecision = buildAdaptiveDayPlanner({
+      signals: {
+        checkinRequired: false,
+        readiness: recommendation?.readiness_score ?? readinessScore,
+        hasConflict:
+          recommendation?.recommendation_type
+            ? recommendation.recommendation_type !== "keep"
+            : fallbackEvaluation.decision !== "PROCEED",
+        activeInjury: Boolean(plannerContext?.userProfile.activeInjuries.some((injury) => injury.status === "ACTIVE")),
+        hardFeedbackCount:
+          (plannerContext?.recentSignals.feedbackPatterns14d.perceivedDifficultyCounts.HARD ?? 0) +
+          (plannerContext?.recentSignals.feedbackPatterns14d.perceivedDifficultyCounts.BRUTAL ?? 0),
+      },
+      decisionDate: formatLocalDateInput(today),
+      todayWorkouts: horizonWorkouts
+        .map(
+          (workout): AdaptivePlannerWorkout => ({
+            ...workout,
+            date: formatLocalDateInput(workout.date),
+            durationMin: workout.durationMin ?? null,
+            tss: workout.tss ?? null,
+          })
+        )
+        .filter((workout) => workout.date === formatLocalDateInput(today)),
+      horizonWorkouts: horizonWorkouts.map(
+        (workout): AdaptivePlannerWorkout => ({
+          ...workout,
+          date: formatLocalDateInput(workout.date),
+          durationMin: workout.durationMin ?? null,
+          tss: workout.tss ?? null,
+        })
+      ),
+      feedbackRequiredWorkout: null,
+    });
+
+    recommendation = mergePlannerIntoRecommendation({
+      planner: plannerDecision,
+      recommendation,
+      readinessScore,
+      before: plannedSnapshot,
+    });
 
     const decisionSource = recommendation
       ? mapRecommendationToDecision(recommendation.recommendation_type)
@@ -959,7 +1122,7 @@ export async function acceptAIRecommendation(
         const locked = isWorkoutLocked({ workoutDate: new Date(targetWorkout.date), planRigidity });
         const after = parsedRecommendation.recommendation_type === "keep"
           ? before
-          : buildAfterSnapshot(before, parsedRecommendation);
+          : parsedRecommendation.changes.after ?? buildAfterSnapshot(before, parsedRecommendation);
 
         const shouldApply =
           parsedRecommendation.changes.apply &&
@@ -1097,6 +1260,7 @@ export async function acceptAIRecommendation(
           where: { id: targetWorkout.id },
           data: updateData,
         });
+        await invalidateAdaptiveDayPlannerCacheForWorkoutDate(session.user.id, new Date(targetWorkout.date));
 
         await db.auditLog.create({
           data: {
@@ -1279,6 +1443,7 @@ export async function acceptAIRecommendation(
         where: { id: targetWorkout.id },
         data: updateData,
       });
+      await invalidateAdaptiveDayPlannerCacheForWorkoutDate(session.user.id, new Date(targetWorkout.date));
       appliedResult = { applied: true, workoutId: targetWorkout.id };
     }
 
@@ -1910,6 +2075,13 @@ export interface PremiumCheckinResult {
   hasConflict: boolean;
   conflictReason: string | null;
   suggestedChange: string | null;
+  plannerDecision?: AdaptiveDayPlannerPayload["decision"];
+  plannerState?: AdaptiveDayPlannerPayload["state"];
+  plannerReasons?: string[];
+  plannerPatchPreview?: AdaptiveDayPlannerPayload["patchPreview"];
+  plannerGeneratedAt?: string;
+  plannerStale?: boolean;
+  plannerStaleReason?: "CHECKIN_UPDATED" | "WORKOUT_UPDATED" | null;
   createdAt: string;
   updatedAt: string;
   planLocked: boolean;
@@ -1923,34 +2095,143 @@ export async function computeReadiness100(input: PremiumCheckinInput): Promise<P
   return calculatePremiumReadiness(input);
 }
 
-const INTENSIVE_KEYWORDS = [
-  "interval",
-  "intervals",
-  "tempo",
-  "race",
-  "brick",
-  "threshold",
-  "vo2max",
-  "hard",
-];
-const HARD_TSS_THRESHOLD = 80;
 const MAX_HARD_SESSIONS_PER_WEEK = 3;
 
-function matchesIntensiveKeyword(text: string | null | undefined): boolean {
-  if (!text) return false;
-  const normalized = text.toLowerCase();
-  return INTENSIVE_KEYWORDS.some((keyword) => normalized.includes(keyword));
-}
+async function buildPremiumPlannerResult(params: {
+  userId: string;
+  today: Date;
+  readinessScore: number;
+  fatigue: number;
+  soreness: number;
+}): Promise<{
+  planner: AdaptiveDayPlannerPayload;
+  hasConflict: boolean;
+  conflictReason: string | null;
+  suggestedChange: string | null;
+  todayWorkout: { id: string; title: string; type: string; tss: number | null } | null;
+  planLocked: boolean;
+}> {
+  const { userId, today, readinessScore, fatigue, soreness } = params;
+  const horizonEnd = addDays(today, 3);
+  const tomorrow = addDays(today, 1);
+  const weekStart = addDays(today, -6);
+  const [plannerContext, horizonWorkouts, profile, recentWeekWorkouts] = await Promise.all([
+    buildAIContextForUser(userId).catch(() => null),
+    db.workout.findMany({
+      where: {
+        userId,
+        date: { gte: today, lt: horizonEnd },
+      },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        date: true,
+        planned: true,
+        completed: true,
+        durationMin: true,
+        tss: true,
+      },
+    }),
+    db.profile.findUnique({
+      where: { userId },
+      select: { planRigidity: true },
+    }),
+    db.workout.findMany({
+      where: {
+        userId,
+        date: { gte: weekStart, lt: tomorrow },
+      },
+      select: {
+        id: true,
+        date: true,
+        type: true,
+        title: true,
+        tss: true,
+      },
+    }),
+  ]);
 
-function isWorkoutIntense(workout: {
-  type?: string | null;
-  title?: string | null;
-  tss?: number | null;
-}): boolean {
-  if (workout.tss && workout.tss > HARD_TSS_THRESHOLD) return true;
-  if (workout.type && matchesIntensiveKeyword(workout.type)) return true;
-  if (workout.title && matchesIntensiveKeyword(workout.title)) return true;
-  return false;
+  const decisionDate = formatLocalDateInput(today);
+  const mappedHorizon = horizonWorkouts.map(
+    (workout): AdaptivePlannerWorkout => ({
+      ...workout,
+      date: formatLocalDateInput(workout.date),
+      durationMin: workout.durationMin ?? null,
+      tss: workout.tss ?? null,
+    })
+  );
+  const todayWorkout = mappedHorizon.find((workout) => workout.date === decisionDate && !workout.completed) ?? null;
+  const todayWorkoutCompact = todayWorkout
+    ? {
+        id: todayWorkout.id,
+        title: todayWorkout.title,
+        type: todayWorkout.type,
+        tss: todayWorkout.tss ?? null,
+        durationMin: todayWorkout.durationMin ?? null,
+      }
+    : null;
+  const hardSessionsBeforeToday = recentWeekWorkouts.filter((workout) => {
+    if (!isAdaptivePlannerWorkoutIntense({ type: workout.type, title: workout.title, tss: workout.tss ?? null })) {
+      return false;
+    }
+    const workoutDate = new Date(workout.date);
+    const isTodayWorkout = todayWorkout && workout.id === todayWorkout.id;
+    if (isTodayWorkout) return false;
+    return workoutDate.getTime() < tomorrow.getTime();
+  }).length;
+  const planRigidity = (profile?.planRigidity as PlanRigiditySetting) || "LOCKED_1_DAY";
+  const planLocked = todayWorkout
+    ? isWorkoutLocked({
+        workoutDate: new Date(todayWorkout.date),
+        planRigidity,
+      })
+    : false;
+
+  const planner = buildAdaptiveDayPlanner({
+    signals: {
+      checkinRequired: false,
+      readiness: readinessScore,
+      hasConflict: derivePremiumConflictSignal({
+        readinessScore,
+        fatigue,
+        soreness,
+        todayWorkout: todayWorkoutCompact,
+        recentHardSessionsBeforeToday: hardSessionsBeforeToday,
+        maxHardSessionsPerWeek: MAX_HARD_SESSIONS_PER_WEEK,
+      }),
+      activeInjury: Boolean(plannerContext?.userProfile.activeInjuries.some((injury) => injury.status === "ACTIVE")),
+      hardFeedbackCount:
+        (plannerContext?.recentSignals.feedbackPatterns14d.perceivedDifficultyCounts.HARD ?? 0) +
+        (plannerContext?.recentSignals.feedbackPatterns14d.perceivedDifficultyCounts.BRUTAL ?? 0),
+    },
+    decisionDate,
+    todayWorkouts: mappedHorizon.filter((workout) => workout.date === decisionDate),
+    horizonWorkouts: mappedHorizon,
+    feedbackRequiredWorkout: null,
+  });
+
+  const suggestion = mapPlannerPatchToConflictSuggestion(planner, todayWorkoutCompact);
+  const hasConflict = Boolean(
+    (planner.decision === "ADAPT_SESSION" || planner.decision === "RECOVER_AND_REPLAN") && suggestion
+  );
+
+  return {
+    planner,
+    hasConflict,
+    conflictReason: hasConflict ? planner.why : null,
+    suggestedChange: suggestion ? JSON.stringify(suggestion) : null,
+    todayWorkout: todayWorkoutCompact
+      ? {
+          id: todayWorkoutCompact.id,
+          title: todayWorkoutCompact.title,
+          type: todayWorkoutCompact.type,
+          tss: todayWorkoutCompact.tss ?? null,
+        }
+      : null,
+    planLocked,
+  };
 }
 
 /**
@@ -1970,124 +2251,21 @@ export async function detectWorkoutConflict(
 }> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  // Get today's planned workout
-  const todayWorkout = await db.workout.findFirst({
-    where: {
-      userId,
-      date: { gte: today, lt: tomorrow },
-      completed: false,
-    },
-    select: { id: true, title: true, type: true, tss: true, date: true },
+  const result = await buildPremiumPlannerResult({
+    userId,
+    today,
+    readinessScore,
+    fatigue,
+    soreness,
   });
 
-  if (!todayWorkout) {
-    return { hasConflict: false, conflictReason: null, suggestedChange: null, todayWorkout: null, planLocked: false };
-  }
-
-  const isIntense = isWorkoutIntense({
-    type: todayWorkout.type,
-    title: todayWorkout.title,
-    tss: todayWorkout.tss ?? null,
-  });
-
-  // Conflict detection rules
-  let hasConflict = false;
-  let conflictReason: string | null = null;
-  let suggestedChange: string | null = null;
-  let planLocked = false;
-
-  const profile = await db.profile.findUnique({
-    where: { userId },
-    select: { planRigidity: true },
-  });
-  const planRigidity = (profile?.planRigidity as PlanRigiditySetting) || "LOCKED_1_DAY";
-  planLocked = isWorkoutLocked({
-    workoutDate: new Date(todayWorkout.date),
-    planRigidity,
-  });
-
-  const weekStart = new Date(today);
-  weekStart.setDate(weekStart.getDate() - 6);
-
-  const recentWeekWorkouts = await db.workout.findMany({
-    where: {
-      userId,
-      date: { gte: weekStart, lt: tomorrow },
-    },
-    select: {
-      id: true,
-      date: true,
-      type: true,
-      title: true,
-      tss: true,
-    },
-  });
-
-  const hardSessionsBeforeToday = recentWeekWorkouts.filter((workout) => {
-    if (!isWorkoutIntense({ type: workout.type, title: workout.title, tss: workout.tss ?? null })) {
-      return false;
-    }
-    const workoutDate = new Date(workout.date);
-    const isTodayWorkout = todayWorkout && workout.id === todayWorkout.id;
-    if (isTodayWorkout) return false;
-    return workoutDate.getTime() < tomorrow.getTime();
-  }).length;
-
-  const guardrailExceeded =
-    hardSessionsBeforeToday >= MAX_HARD_SESSIONS_PER_WEEK && isIntense;
-
-  if (isIntense && readinessScore < 60) {
-    hasConflict = true;
-    conflictReason = "Low readiness for intense workout";
-    suggestedChange = JSON.stringify({
-      action: "swap_easy",
-      reason: "Swap to easy Zone 2 session",
-      newType: "easy",
-      newTitle: "Easy Recovery Run",
-    });
-  } else if (soreness > 70) {
-    hasConflict = true;
-    conflictReason = "High muscle soreness";
-    suggestedChange = JSON.stringify({
-      action: "reduce_duration",
-      reason: "Shorten session and focus on technique",
-      durationFactor: 0.6,
-    });
-  } else if (fatigue > 75) {
-    hasConflict = true;
-    conflictReason = "High fatigue level";
-    suggestedChange = JSON.stringify({
-      action: "swap_recovery",
-      reason: "Replace with recovery session",
-      newType: "recovery",
-      newTitle: "Recovery Session",
-    });
-  } else if (isIntense && readinessScore < 70) {
-    // Warning but not full conflict
-    hasConflict = true;
-    conflictReason = "Moderate readiness for intense session";
-    suggestedChange = JSON.stringify({
-      action: "reduce_intensity",
-      reason: "Reduce intensity by 15%",
-      intensityFactor: 0.85,
-    });
-  }
-
-  if (!hasConflict && guardrailExceeded) {
-    hasConflict = true;
-    conflictReason = "Weekly hard-session guardrail exceeded";
-    suggestedChange = JSON.stringify({
-      action: "swap_recovery",
-      reason: "Respect the weekly guardrail and favor recovery",
-      newType: "recovery",
-      newTitle: "Recovery Session",
-    });
-  }
-
-  return { hasConflict, conflictReason, suggestedChange, todayWorkout, planLocked };
+  return {
+    hasConflict: result.hasConflict,
+    conflictReason: result.conflictReason,
+    suggestedChange: result.suggestedChange,
+    todayWorkout: result.todayWorkout,
+    planLocked: result.planLocked,
+  };
 }
 
 /**
@@ -2137,14 +2315,20 @@ export async function savePremiumCheckin(
     // Compute readiness
     const { readinessScore, topFactor, recommendation } = await computeReadiness100(input);
 
-    // Detect conflicts
     const {
+      planner,
       hasConflict,
       conflictReason,
       suggestedChange,
       todayWorkout,
       planLocked,
-    } = await detectWorkoutConflict(userId, readinessScore, input.fatigue, input.soreness);
+    } = await buildPremiumPlannerResult({
+      userId,
+      today,
+      readinessScore,
+      fatigue: input.fatigue,
+      soreness: input.soreness,
+    });
 
     // Save check-in
     const checkIn = await db.dailyCheckIn.upsert({
@@ -2186,6 +2370,8 @@ export async function savePremiumCheckin(
         workoutId: todayWorkout?.id || null,
       },
     });
+
+    const persistedPlanner = await persistAdaptiveDayPlannerCache(userId, today, planner);
 
     // Track analytics
     await track({
@@ -2231,6 +2417,13 @@ export async function savePremiumCheckin(
         hasConflict,
         conflictReason,
         suggestedChange,
+        plannerDecision: persistedPlanner.decision,
+        plannerState: persistedPlanner.state,
+        plannerReasons: persistedPlanner.reasons,
+        plannerPatchPreview: persistedPlanner.patchPreview ?? null,
+        plannerGeneratedAt: persistedPlanner.generatedAt,
+        plannerStale: false,
+        plannerStaleReason: null,
         planLocked,
         createdAt: checkIn.createdAt.toISOString(),
         updatedAt: checkIn.updatedAt.toISOString(),
@@ -2286,14 +2479,35 @@ export async function getTodayPremiumCheckin(): Promise<{
     where: { userId },
     select: { planRigidity: true },
   });
-
   const planRigidity = (profile?.planRigidity as PlanRigiditySetting) || "LOCKED_1_DAY";
+  const plannerSnapshot = await getAdaptiveDayPlannerCacheSnapshot(userId, today);
+  const cachedPlanner = plannerSnapshot.payload;
   const planLocked =
-    todayWorkout &&
-    isWorkoutLocked({
-      workoutDate: new Date(todayWorkout.date),
-      planRigidity,
-    });
+    todayWorkout != null
+      ? isWorkoutLocked({
+          workoutDate: new Date(todayWorkout.date),
+          planRigidity,
+        })
+      : false;
+  const cachedSuggestedChange = cachedPlanner
+    ? mapPlannerPatchToConflictSuggestion(cachedPlanner, {
+        title: todayWorkout?.title ?? "",
+        type: todayWorkout?.type ?? "",
+        durationMin: null,
+        tss: todayWorkout?.tss ?? null,
+      })
+    : null;
+
+  const plannerResult =
+    !cachedPlanner && checkIn && checkIn.readinessScore !== null && checkIn.fatigue100 !== null && checkIn.soreness100 !== null
+      ? await buildPremiumPlannerResult({
+          userId,
+          today,
+          readinessScore: checkIn.readinessScore,
+          fatigue: checkIn.fatigue100,
+          soreness: checkIn.soreness100,
+        })
+      : null;
 
     // Determine status
     let status: "pending" | "completed" | "required" = "pending";
@@ -2301,13 +2515,11 @@ export async function getTodayPremiumCheckin(): Promise<{
     if (checkIn && checkIn.sleepQuality100 !== null) {
       status = "completed";
     } else if (todayWorkout) {
-      // Check if workout is intense -> required
-      const intensiveTypes = ["interval", "intervals", "tempo", "race", "brick", "threshold", "vo2max", "hard"];
-      const isIntense = intensiveTypes.some(t => 
-        todayWorkout.type.toLowerCase().includes(t) || 
-        todayWorkout.title.toLowerCase().includes(t)
-      ) || (todayWorkout.tss && todayWorkout.tss > 80);
-      
+      const isIntense = isAdaptivePlannerWorkoutIntense({
+        type: todayWorkout.type,
+        title: todayWorkout.title,
+        tss: todayWorkout.tss ?? null,
+      });
       status = isIntense ? "required" : "pending";
     }
 
@@ -2331,12 +2543,28 @@ export async function getTodayPremiumCheckin(): Promise<{
         recommendation: checkIn.recommendation ?? "",
         notes: checkIn.notes,
         notesVisibility: checkIn.notesVisibility ?? "FULL_AI_ACCESS",
-        hasConflict: checkIn.hasConflict,
-        conflictReason: checkIn.conflictReason,
-        suggestedChange: checkIn.suggestedChange,
+        hasConflict:
+          plannerResult?.hasConflict ??
+          Boolean(
+            cachedPlanner &&
+              (cachedPlanner.decision === "ADAPT_SESSION" || cachedPlanner.decision === "RECOVER_AND_REPLAN") &&
+              cachedSuggestedChange
+          ) ??
+          checkIn.hasConflict,
+        conflictReason: plannerResult?.conflictReason ?? cachedPlanner?.why ?? checkIn.conflictReason,
+        suggestedChange:
+          plannerResult?.suggestedChange ??
+          (cachedSuggestedChange ? JSON.stringify(cachedSuggestedChange) : checkIn.suggestedChange),
+        plannerDecision: plannerResult?.planner.decision ?? cachedPlanner?.decision,
+        plannerState: plannerResult?.planner.state ?? cachedPlanner?.state,
+        plannerReasons: plannerResult?.planner.reasons ?? cachedPlanner?.reasons,
+        plannerPatchPreview: plannerResult?.planner.patchPreview ?? cachedPlanner?.patchPreview ?? null,
+        plannerGeneratedAt: plannerResult?.planner.generatedAt ?? cachedPlanner?.generatedAt,
+        plannerStale: plannerResult ? false : plannerSnapshot.stale,
+        plannerStaleReason: plannerResult ? null : plannerSnapshot.staleReason,
         createdAt: checkIn.createdAt.toISOString(),
         updatedAt: checkIn.updatedAt.toISOString(),
-        planLocked: !!planLocked,
+        planLocked: plannerResult?.planLocked ?? planLocked,
       },
     };
   } catch (error) {
@@ -2447,7 +2675,7 @@ export async function acceptConflictSuggestion(
     }
 
     // Parse suggested change
-    const suggestion = JSON.parse(checkIn.suggestedChange);
+    const suggestion = JSON.parse(checkIn.suggestedChange) as PremiumConflictSuggestion;
     
     // Check if workout is locked
     const locked = isWorkoutLocked({ workoutDate: new Date(workout.date), planRigidity });
@@ -2461,10 +2689,18 @@ export async function acceptConflictSuggestion(
             aiGenerated: true,
             aiReason: checkIn.conflictReason || "Conflict detected from check-in",
             source: "daily-checkin-conflict",
-            ...(suggestion.newTitle && { title: suggestion.newTitle }),
-            ...(suggestion.newType && { type: suggestion.newType }),
-            ...(suggestion.durationFactor && { durationMin: Math.round((workout.durationMin || 60) * suggestion.durationFactor) }),
-            ...(suggestion.intensityFactor && workout.tss && { tss: Math.round(workout.tss * suggestion.intensityFactor) }),
+            ...(suggestion.patch?.title && { title: suggestion.patch.title }),
+            ...(suggestion.patch?.type && { type: suggestion.patch.type }),
+            ...(typeof suggestion.patch?.durationMin === "number"
+              ? { durationMin: suggestion.patch.durationMin }
+              : suggestion.durationFactor
+              ? { durationMin: Math.round((workout.durationMin || 60) * suggestion.durationFactor) }
+              : {}),
+            ...(typeof suggestion.patch?.tss === "number"
+              ? { tss: suggestion.patch.tss }
+              : suggestion.intensityFactor && workout.tss
+              ? { tss: Math.round(workout.tss * suggestion.intensityFactor) }
+              : {}),
           },
         },
       };
@@ -2504,12 +2740,18 @@ export async function acceptConflictSuggestion(
       source: "daily-checkin-conflict",
     };
 
-    if (suggestion.newTitle) updateData.title = suggestion.newTitle;
-    if (suggestion.newType) updateData.type = suggestion.newType;
-    if (suggestion.durationFactor) {
+    if (suggestion.patch?.title) updateData.title = suggestion.patch.title;
+    else if (suggestion.newTitle) updateData.title = suggestion.newTitle;
+    if (suggestion.patch?.type) updateData.type = suggestion.patch.type;
+    else if (suggestion.newType) updateData.type = suggestion.newType;
+    if (typeof suggestion.patch?.durationMin === "number") {
+      updateData.durationMin = suggestion.patch.durationMin;
+    } else if (suggestion.durationFactor) {
       updateData.durationMin = Math.round((workout.durationMin || 60) * suggestion.durationFactor);
     }
-    if (suggestion.intensityFactor && workout.tss) {
+    if (typeof suggestion.patch?.tss === "number") {
+      updateData.tss = suggestion.patch.tss;
+    } else if (suggestion.intensityFactor && workout.tss) {
       updateData.tss = Math.round(workout.tss * suggestion.intensityFactor);
     }
 
@@ -2517,6 +2759,7 @@ export async function acceptConflictSuggestion(
       where: { id: workout.id },
       data: updateData,
     });
+    await invalidateAdaptiveDayPlannerCacheForWorkoutDate(session.user.id, new Date(workout.date));
 
     // Clear conflict flags
     await db.dailyCheckIn.update({

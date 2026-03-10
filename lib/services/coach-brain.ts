@@ -49,6 +49,20 @@ export type CoachBrainContext = {
   aimemorySummary: Awaited<ReturnType<typeof getAIMemorySummary>>;
 };
 
+function getProfilePreferences(context: CoachBrainContext): Record<string, unknown> {
+  return (context.aiContext.userProfile.preferences as Record<string, unknown> | null) ?? {};
+}
+
+function getAvailabilitySettings(context: CoachBrainContext): Record<string, unknown> {
+  return (context.aiContext.userProfile.availability as Record<string, unknown> | null) ?? {};
+}
+
+function getActiveInjuryAreas(context: CoachBrainContext): string[] {
+  return (context.aiContext.userProfile.activeInjuries ?? [])
+    .filter((injury) => injury.status === "ACTIVE")
+    .map((injury) => injury.area.toLowerCase());
+}
+
 /**
  * Load full context for coach decisions (deterministic, logged).
  */
@@ -233,16 +247,46 @@ export function generateRubricPrescription(
 ): WorkoutRubricPrescription {
   const sport = intent.sport ?? "RUN";
   const date = intent.date ?? context.aiContext.planSummary.today;
-  const durationMin = Math.min(120, Math.max(20, intent.durationMinHint ?? 60));
+  const profilePrefs = getProfilePreferences(context);
+  const availability = getAvailabilitySettings(context);
+  const memoryPreference = context.aimemorySummary?.preference ?? null;
+  const maxMinutesPerDay =
+    typeof availability.maxMinutesPerDay === "number" && availability.maxMinutesPerDay >= 20
+      ? availability.maxMinutesPerDay
+      : null;
+  const durationCap = maxMinutesPerDay != null ? Math.min(120, maxMinutesPerDay) : 120;
+  const requestedDuration = intent.durationMinHint ?? 60;
+  const durationMin = Math.min(durationCap, Math.max(20, requestedDuration));
   const profile = context.aiContext.userProfile;
   const identityMode = (profile.identityMode as string) ?? "competitive";
   const experienceLevel = (profile.experienceLevel as string) ?? "intermediate";
+  const hardSessionsLimit =
+    profilePrefs.hardSessionsPerWeek === 1 ||
+    profilePrefs.hardSessionsPerWeek === 2 ||
+    profilePrefs.hardSessionsPerWeek === 3
+      ? profilePrefs.hardSessionsPerWeek
+      : MAX_HARD_SESSIONS_PER_WEEK;
+  const preferredTypes = new Set(memoryPreference?.preferredSessionTypes ?? []);
+  const avoidedTypes = new Set(memoryPreference?.avoidedSessionTypes ?? []);
+  const activeInjuryAreas = getActiveInjuryAreas(context);
+  const hasShoulderInjury = activeInjuryAreas.some((area) => /shoulder|bark/.test(area));
+  const hasLowerLimbInjury = activeInjuryAreas.some((area) => /knee|ankle|foot|shin|hamstring|calf|achilles|hip/.test(area));
 
   const isLowReadiness =
     (context.aiContext.todayCheckin?.data?.readinessScore ?? 100) < 50 ||
     (context.aiContext.todayCheckin?.data?.soreness ?? 0) >= 4;
 
-  const intensity = isLowReadiness ? "easy" : "moderate";
+  const overHardSessionLimit = context.hardSessionsThisWeek >= hardSessionsLimit;
+  const shouldAvoidImpactToday = hasLowerLimbInjury && sport === "RUN";
+  const sessionPreferencePenalty = avoidedTypes.has(sport.toLowerCase());
+  const sessionPreferenceBoost = preferredTypes.has(sport.toLowerCase());
+
+  const intensity =
+    isLowReadiness || overHardSessionLimit || shouldAvoidImpactToday || sessionPreferencePenalty
+      ? "easy"
+      : memoryPreference?.intensityPreference === "HIGH" || sessionPreferenceBoost
+        ? "moderate"
+        : "moderate";
   const effectiveDuration = isLowReadiness ? Math.round(durationMin * 0.75) : durationMin;
 
   const warmupMin = Math.max(5, Math.round(effectiveDuration * 0.15));
@@ -252,7 +296,7 @@ export function generateRubricPrescription(
   const options =
     sport === "SWIM" && intent.targetMeters != null
       ? { requestedTotalMeters: intent.targetMeters }
-      : sport === "STRENGTH" && context.strengthMobilityOnly
+      : sport === "STRENGTH" && (context.strengthMobilityOnly || hasShoulderInjury)
         ? { strengthMobilityOnly: true }
         : undefined;
   const { warmup, main, cooldown, techniqueCues, intensityTargets, goal, title } = buildBlocksBySport(
@@ -265,14 +309,35 @@ export function generateRubricPrescription(
     options
   );
 
-  const rationale = isLowReadiness
-    ? "Adapted for lower readiness: reduced volume and intensity to support recovery while keeping consistency."
-    : `Session aligned with ${identityMode} mode and ${experienceLevel} level.`;
+  const rationaleParts: string[] = [];
+  if (isLowReadiness) {
+    rationaleParts.push("Adapted for lower readiness: reduced volume and intensity to support recovery while keeping consistency.");
+  } else {
+    rationaleParts.push(`Session aligned with ${identityMode} mode and ${experienceLevel} level.`);
+  }
+  if (maxMinutesPerDay != null && requestedDuration > maxMinutesPerDay) {
+    rationaleParts.push(`Capped to ${maxMinutesPerDay} min based on your availability setting.`);
+  }
+  if (overHardSessionLimit) {
+    rationaleParts.push(`Shifted away from extra intensity because your hard-session limit is ${hardSessionsLimit} per week.`);
+  }
+  if (sessionPreferencePenalty) {
+    rationaleParts.push(`Kept this session conservative because recent feedback suggests ${sport.toLowerCase()} has been less enjoyable lately.`);
+  } else if (sessionPreferenceBoost) {
+    rationaleParts.push(`Leaned into ${sport.toLowerCase()} because recent feedback shows strong buy-in for this session type.`);
+  }
+  if (shouldAvoidImpactToday) {
+    rationaleParts.push("Protected current lower-limb injury load by keeping the run impact low.");
+  }
+  if (hasShoulderInjury && (sport === "SWIM" || sport === "STRENGTH")) {
+    rationaleParts.push("Shoulder-sensitive variant selected from active injury context.");
+  }
+  const rationale = rationaleParts.join(" ");
 
   const why: WhyDrivers = {
     rationale,
     guardrailChecks: [
-      `Hard sessions this week: ${context.hardSessionsThisWeek} (max ${MAX_HARD_SESSIONS_PER_WEEK})`,
+      `Hard sessions this week: ${context.hardSessionsThisWeek} (max ${hardSessionsLimit})`,
       `Ramp: ${context.loadMetrics.rampRate ?? "n/a"}%`,
     ],
     adaptationReason: isLowReadiness ? "Readiness/soreness triggered easier variant." : undefined,

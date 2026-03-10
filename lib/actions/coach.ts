@@ -9,6 +9,7 @@ import { addDays, startOfWeek } from "@/lib/utils";
 import { calculateReadinessScore, type CheckInData } from "@/lib/services/daily-checkin.service";
 import { getFeedbackPatterns } from "@/lib/actions/workout-feedback";
 import { buildAIContextForUser } from "@/lib/services/ai-context.builder";
+import { invalidateAdaptiveDayPlannerCacheForDateRange } from "@/lib/services/adaptive-day-planner-cache.service";
 
 type BuiltAIContext = Awaited<ReturnType<typeof buildAIContextForUser>>;
 
@@ -477,6 +478,8 @@ export async function generateTrainingPlan(): Promise<GeneratePlanResult> {
         warningsJson: plan.warnings.length > 0 ? JSON.stringify(plan.warnings) : null,
       },
     });
+
+    await invalidateAdaptiveDayPlannerCacheForDateRange(userId, plan.startDate, plan.endDate);
 
     return {
       success: true,

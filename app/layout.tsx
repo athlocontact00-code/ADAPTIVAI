@@ -15,17 +15,34 @@ export const viewport: Viewport = {
 };
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://www.adaptivai.online";
-const assetVersion = "6";
+const assetVersion = "8";
+
+const brandTitle = "AdaptivAI";
+const brandDescription =
+  "Adaptive training plans for endurance athletes that respond to fatigue, schedule, and goals.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
-  title: "AdaptivAI - Intelligent Training Platform",
-  description: "Your AI-powered training companion for optimized performance",
+  applicationName: brandTitle,
+  title: {
+    default: brandTitle,
+    template: `%s | ${brandTitle}`,
+  },
+  description: brandDescription,
+  keywords: [
+    "adaptive training",
+    "triathlon training",
+    "running coach",
+    "cycling coach",
+    "swim training",
+    "AI coach",
+    "endurance training",
+  ],
   manifest: `/manifest.webmanifest?v=${assetVersion}`,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "AdaptivAI",
+    title: brandTitle,
   },
   icons: {
     icon: [
@@ -34,23 +51,25 @@ export const metadata: Metadata = {
       { url: `/favicon-48.png?v=${assetVersion}`, sizes: "48x48", type: "image/png" },
       { url: `/favicon.png?v=${assetVersion}`, sizes: "48x48", type: "image/png" },
     ],
+    shortcut: [
+      { url: `/favicon-32.png?v=${assetVersion}`, sizes: "32x32", type: "image/png" },
+    ],
     apple: [{ url: `/apple-touch-icon.png?v=${assetVersion}`, sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     type: "website",
-    title: "AdaptivAI - Intelligent Training Platform",
-    description: "Your AI-powered training companion for optimized performance",
-    siteName: "AdaptivAI",
+    title: brandTitle,
+    description: brandDescription,
+    siteName: brandTitle,
     images: [
-      { url: `/icons/icon-512.png?v=${assetVersion}`, width: 512, height: 512, alt: "AdaptivAI" },
-      { url: `/logo.png?v=${assetVersion}`, width: 512, height: 512, alt: "AdaptivAI" },
+      { url: `/opengraph-image?v=${assetVersion}`, width: 1200, height: 630, alt: brandTitle },
     ],
   },
   twitter: {
-    card: "summary",
-    title: "AdaptivAI - Intelligent Training Platform",
-    description: "Your AI-powered training companion for optimized performance",
-    images: [`/icons/icon-512.png?v=${assetVersion}`],
+    card: "summary_large_image",
+    title: brandTitle,
+    description: brandDescription,
+    images: [`/twitter-image?v=${assetVersion}`],
   },
   other: {
     "apple-mobile-web-app-capable": "yes",

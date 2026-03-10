@@ -7,9 +7,14 @@ vi.mock("@/lib/db", () => ({
     workout: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
+}));
+vi.mock("@/lib/services/adaptive-day-planner-cache.service", () => ({
+  invalidateAdaptiveDayPlannerCacheForDateRange: vi.fn(),
 }));
 
 import { auth } from "@/lib/auth";
@@ -17,8 +22,10 @@ import { db } from "@/lib/db";
 import {
   insertDraftWorkoutsFromCalendarJson,
   insertWorkoutFromCoachResponse,
+  undoDraftWorkouts,
 } from "./coach-draft";
 import { extractPayloadFromAssistantMessages } from "@/lib/coach/calendar-payload-from-messages";
+import { invalidateAdaptiveDayPlannerCacheForDateRange } from "@/lib/services/adaptive-day-planner-cache.service";
 
 /** Cast auth mock to accept Session | null (avoids NextMiddleware type from next-auth). */
 const setAuthSession = (s: Session | null) => {
@@ -42,6 +49,7 @@ const validPayload = {
 
 describe("insertDraftWorkoutsFromCalendarJson", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     setAuthSession({
       user: { id: "user-1", email: "u@example.com" },
       expires: "",
@@ -49,6 +57,8 @@ describe("insertDraftWorkoutsFromCalendarJson", () => {
     vi.mocked(db.workout.create).mockResolvedValue({
       id: "workout-created-id",
     } as never);
+    vi.mocked(db.workout.findMany).mockResolvedValue([]);
+    vi.mocked(db.workout.deleteMany).mockResolvedValue({ count: 0 } as never);
   });
 
   it("returns success and created workout id when insert succeeds", async () => {
@@ -60,6 +70,11 @@ describe("insertDraftWorkoutsFromCalendarJson", () => {
     expect(result.createdIds).toHaveLength(1);
     expect(result.createdIds[0]).toBe("workout-created-id");
     expect(result.error).toBeUndefined();
+    expect(invalidateAdaptiveDayPlannerCacheForDateRange).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Date),
+      expect.any(Date)
+    );
   });
 
   it("returns unauthorized when no session", async () => {
@@ -92,6 +107,11 @@ describe("insertDraftWorkoutsFromCalendarJson", () => {
     expect(db.workout.findFirst).toHaveBeenCalled();
     expect(db.workout.update).toHaveBeenCalled();
     expect(db.workout.create).not.toHaveBeenCalled();
+    expect(invalidateAdaptiveDayPlannerCacheForDateRange).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Date),
+      expect.any(Date)
+    );
   });
 
   it("applies ensureExactTotalMeters for SWIM when computed total differs from target", async () => {
@@ -125,6 +145,61 @@ Cool-down: 400m`,
     const sum = parseSwimMetersFromText(data.descriptionMd);
     expect(sum).toBe(3000);
     expect(data.distanceM).toBe(3000);
+  });
+
+  it("invalidates planner cache using sorted touched dates when payload spans multiple unsorted days", async () => {
+    const multiDayPayload = {
+      ...validPayload,
+      items: [
+        { ...validPayload.items[0], date: "2025-02-08" },
+        { ...validPayload.items[0], date: "2025-02-06", title: "Earlier Run" },
+      ],
+    };
+
+    await insertDraftWorkoutsFromCalendarJson(multiDayPayload, {
+      forceMode: "final",
+    });
+
+    expect(invalidateAdaptiveDayPlannerCacheForDateRange).toHaveBeenLastCalledWith(
+      "user-1",
+      new Date(2025, 1, 6, 12, 0, 0, 0),
+      new Date(2025, 1, 8, 12, 0, 0, 0)
+    );
+  });
+});
+
+describe("undoDraftWorkouts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setAuthSession({
+      user: { id: "user-1", email: "u@example.com" },
+      expires: "",
+    } as Session);
+    vi.mocked(db.workout.findMany).mockResolvedValue([
+      { date: new Date(2025, 1, 6, 12, 0, 0, 0) },
+      { date: new Date(2025, 1, 8, 12, 0, 0, 0) },
+    ] as never);
+    vi.mocked(db.workout.deleteMany).mockResolvedValue({ count: 2 } as never);
+  });
+
+  it("invalidates planner cache after deleting recent draft workouts", async () => {
+    const result = await undoDraftWorkouts(["w1", "w2"]);
+
+    expect(result).toEqual({ success: true, deleted: 2 });
+    expect(invalidateAdaptiveDayPlannerCacheForDateRange).toHaveBeenCalledWith(
+      "user-1",
+      new Date(2025, 1, 6, 12, 0, 0, 0),
+      new Date(2025, 1, 8, 12, 0, 0, 0)
+    );
+  });
+
+  it("does not invalidate planner cache when nothing was deleted", async () => {
+    vi.mocked(db.workout.deleteMany).mockResolvedValue({ count: 0 } as never);
+
+    const result = await undoDraftWorkouts(["w1"]);
+
+    expect(result).toEqual({ success: true, deleted: 0 });
+    expect(invalidateAdaptiveDayPlannerCacheForDateRange).not.toHaveBeenCalled();
   });
 });
 
@@ -173,6 +248,7 @@ describe("extractPayloadFromAssistantMessages", () => {
 
 describe("insertWorkoutFromCoachResponse (no fallback)", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     setAuthSession({
       user: { id: "user-1", email: "u@example.com" },
       expires: "",

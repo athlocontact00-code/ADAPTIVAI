@@ -357,8 +357,8 @@ export function DashboardClient({
     <div className="page-container space-y-6">
       {/* Daily Check-in CTA */}
       <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-transparent to-transparent">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <div className="flex items-center gap-3">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
               <ClipboardCheck className="h-5 w-5 text-primary" />
             </div>
@@ -369,6 +369,7 @@ export function DashboardClient({
           </div>
           <Button
             size="sm"
+            className="w-full sm:w-auto"
             onClick={() => {
               if (!checkInWorkout) {
                 toast.error("No workout found", { description: "Plan a workout in Calendar first" });
@@ -382,10 +383,22 @@ export function DashboardClient({
         </CardHeader>
       </Card>
 
+      {/* Mobile-safe: show adapted badge inline (avoid overlays) */}
+      {todayCheckIn && todayCheckIn.aiDecision && todayCheckIn.aiDecision !== "PROCEED" && todayCheckIn.userAccepted && (
+        <div className="sm:hidden">
+          <Card className="bg-blue-500/10 border-blue-500/30">
+            <CardContent className="p-3 flex items-center gap-2">
+              <Brain className="h-4 w-4 text-blue-500" />
+              <span className="text-sm">Workout adapted based on your check-in</span>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Next action + Retention */}
       {nextAction && (
         <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <CardTitle className="text-base">Next action</CardTitle>
               <CardDescription className="mt-1">
@@ -395,19 +408,20 @@ export function DashboardClient({
             </div>
             {nextActionButton?.href ? (
               <Link href={nextActionButton.href}>
-                <Button size="sm">{nextActionButton.label}</Button>
+                <Button size="sm" className="w-full sm:w-auto">{nextActionButton.label}</Button>
               </Link>
             ) : nextActionButton?.onClick ? (
-              <Button size="sm" onClick={nextActionButton.onClick}>
+              <Button size="sm" onClick={nextActionButton.onClick} className="w-full sm:w-auto">
                 {nextActionButton.label}
               </Button>
             ) : null}
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
+                className="w-full sm:w-auto"
                 onClick={handleExportWeeklySummary}
                 disabled={exportingWeekly}
               >
@@ -1063,7 +1077,7 @@ export function DashboardClient({
 
       {/* Workout Adapted Badge */}
       {todayCheckIn && todayCheckIn.aiDecision && todayCheckIn.aiDecision !== "PROCEED" && todayCheckIn.userAccepted && (
-        <div className="fixed bottom-4 right-4 z-50">
+        <div className="hidden sm:block fixed bottom-4 right-4 z-50">
           <Card className="bg-blue-500/10 border-blue-500/30">
             <CardContent className="p-3 flex items-center gap-2">
               <Brain className="h-4 w-4 text-blue-500" />

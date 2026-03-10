@@ -55,6 +55,18 @@ Cool-down: 400m`;
     const result = ensureExactTotalMeters(text, 1400);
     expect(result).toBe(text);
   });
+
+  it("updates claimed total line when auto-fixing a near-match workout", () => {
+    const text = `Warm-up: 400m easy
+Main set: 20x100m threshold, rest 20s
+Cool-down: 400m easy
+TOTAL METERS: 2800`;
+    const result = ensureExactTotalMeters(text, 3000);
+    expect(parseSwimMetersFromText(result)).toBe(3000);
+    expect(result).toContain("200m easy");
+    expect(result).toContain("TOTAL METERS: 3000");
+    expect(result).not.toContain("TOTAL METERS: 2800");
+  });
 });
 
 describe("getClaimedTotalMeters", () => {

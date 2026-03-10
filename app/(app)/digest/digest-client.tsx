@@ -20,7 +20,7 @@ interface DigestItem {
 
 export function DigestClient({ digests }: { digests: DigestItem[] }) {
   const searchParams = useSearchParams();
-  const selectedId = searchParams.get("id");
+  const selectedId = searchParams?.get("id") ?? null;
 
   const selected = useMemo(
     () => (selectedId ? digests.find((d) => d.id === selectedId) : null),

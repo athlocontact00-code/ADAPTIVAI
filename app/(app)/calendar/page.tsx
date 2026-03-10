@@ -1,13 +1,17 @@
+import React from "react";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { getAdaptiveDayPlannerCacheSnapshot } from "@/lib/services/adaptive-day-planner-cache.service";
+import { getCoachPendingChangesSummary } from "@/lib/services/coach-pending-changes.service";
+import { buildCoachPendingChangesReviewHref } from "@/lib/product/coach-pending-changes";
 import { addDays, startOfWeek } from "@/lib/utils";
 import { CalendarClient } from "./calendar-client";
 
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ workoutId?: string }>;
+  searchParams?: Promise<{ workoutId?: string; proposalId?: string; date?: string; suggestionId?: string; contextDate?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -15,7 +19,14 @@ export default async function CalendarPage({
   }
 
   const today = new Date();
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  today.setHours(0, 0, 0, 0);
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const requestedDate =
+    typeof resolvedSearchParams?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(resolvedSearchParams.date)
+      ? new Date(`${resolvedSearchParams.date}T12:00:00`)
+      : today;
+  requestedDate.setHours(0, 0, 0, 0);
+  const monthStart = new Date(requestedDate.getFullYear(), requestedDate.getMonth(), 1);
   monthStart.setHours(0, 0, 0, 0);
 
   const gridStart = startOfWeek(monthStart);
@@ -99,12 +110,37 @@ export default async function CalendarPage({
     },
   });
 
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const initialTodayDecision = await getAdaptiveDayPlannerCacheSnapshot(session.user.id, today);
+  const coachPendingChanges = await getCoachPendingChangesSummary(session.user.id, today);
+  const initialCoachSuggestionReview =
+    typeof resolvedSearchParams?.suggestionId === "string" && resolvedSearchParams.suggestionId.length > 0
+      ? await db.coachSuggestion.findFirst({
+          where: {
+            id: resolvedSearchParams.suggestionId,
+            userId: session.user.id,
+            status: "PENDING",
+          },
+          select: { id: true, title: true, summary: true, contextDate: true },
+        })
+      : null;
+  const initialProposalReview =
+    typeof resolvedSearchParams?.proposalId === "string" && resolvedSearchParams.proposalId.length > 0
+      ? await db.planChangeProposal.findFirst({
+          where: {
+            id: resolvedSearchParams.proposalId,
+            userId: session.user.id,
+            status: "PENDING",
+          },
+          select: { id: true, workoutId: true, summary: true },
+        })
+      : null;
 
+  const initialOpenWorkoutIdFromProposal =
+    initialProposalReview?.workoutId ?? null;
   const initialOpenWorkoutId =
     typeof resolvedSearchParams?.workoutId === "string" && resolvedSearchParams.workoutId.length > 0
       ? resolvedSearchParams.workoutId
-      : null;
+      : initialOpenWorkoutIdFromProposal;
 
   return (
     <CalendarClient
@@ -113,7 +149,43 @@ export default async function CalendarPage({
       initialCheckIns={checkIns}
       initialFeedbackWorkoutIds={feedbackWorkoutIds}
       initialMonthDate={monthStart}
+      initialSelectedDate={requestedDate}
       initialOpenWorkoutId={initialOpenWorkoutId}
+      initialCoachSuggestionReview={
+        initialCoachSuggestionReview
+          ? {
+              suggestionId: initialCoachSuggestionReview.id,
+              contextDate: initialCoachSuggestionReview.contextDate.toISOString().slice(0, 10),
+              title: initialCoachSuggestionReview.title,
+              summary: initialCoachSuggestionReview.summary,
+              reviewHref: buildCoachPendingChangesReviewHref({
+                suggestionId: initialCoachSuggestionReview.id,
+                contextDate: initialCoachSuggestionReview.contextDate.toISOString().slice(0, 10),
+              }),
+            }
+          : null
+      }
+      initialProposalReview={
+        initialProposalReview
+          ? {
+              proposalId: initialProposalReview.id,
+              summary: initialProposalReview.summary,
+            }
+          : null
+      }
+      initialTodayDecision={
+        initialTodayDecision.payload
+          ? {
+              decision: initialTodayDecision.payload,
+              cached: true,
+              stale: initialTodayDecision.stale,
+              staleReason: initialTodayDecision.staleReason,
+              changedAt: initialTodayDecision.changedAt,
+              date: today.toISOString(),
+            }
+          : null
+      }
+      coachPendingChanges={coachPendingChanges}
     />
   );
 }

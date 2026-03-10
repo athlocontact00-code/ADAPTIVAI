@@ -46,6 +46,23 @@ After text`;
     expect(payload?.items[0].date).toBe("2026-02-10");
   });
 
+  it("prefers the last JSON code block when earlier blocks are only examples", () => {
+    const message = `Example:
+\`\`\`json
+{"calendarInsert":true,"mode":"final","items":[{"date":"2026-02-10","sport":"RUN","title":"Example Run","durationMin":30,"descriptionMd":"Example only"}]}
+\`\`\`
+
+Final:
+\`\`\`json
+{"calendarInsert":true,"mode":"final","items":[{"date":"2026-02-11","sport":"SWIM","title":"Threshold Swim","durationMin":70,"descriptionMd":"Warm-up 400m\nMain 10x100m\nCool-down 200m"}]}
+\`\`\``;
+    const payload = parseCalendarInsertFromResponse(message);
+    expect(payload).not.toBeNull();
+    expect(payload?.items[0].title).toBe("Threshold Swim");
+    expect(payload?.items[0].sport).toBe("SWIM");
+    expect(payload?.items[0].date).toBe("2026-02-11");
+  });
+
   it("returns null when no extractable block", () => {
     expect(parseCalendarInsertFromResponse("Just some text.")).toBeNull();
     expect(parseCalendarInsertFromResponse("Tell me your goal.")).toBeNull();
@@ -91,5 +108,28 @@ Calendar insert ready.`;
     expect(payload).not.toBeNull();
     expect(payload?.items[0].descriptionMd).toBe("Warm-up, main set, cool-down.");
     expect(payload?.items[0].durationMin).toBe(45);
+  });
+
+  it("normalizes lowercase sport and invalid duration to safe defaults", () => {
+    const message = `\`\`\`json
+{
+  "calendarInsert": true,
+  "mode": "final",
+  "items": [
+    {
+      "date": "2026-02-12",
+      "sport": "strength",
+      "title": "Gym Session",
+      "durationMin": "oops",
+      "descriptionMarkdown": "Warm-up\\nMain set\\nCore\\nCool-down"
+    }
+  ]
+}
+\`\`\``;
+    const payload = parseCalendarInsertFromResponse(message);
+    expect(payload).not.toBeNull();
+    expect(payload?.items[0].sport).toBe("STRENGTH");
+    expect(payload?.items[0].durationMin).toBe(60);
+    expect(payload?.items[0].descriptionMd).toContain("Core");
   });
 });

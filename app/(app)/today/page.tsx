@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { getAdaptiveDayPlannerCacheSnapshot } from "@/lib/services/adaptive-day-planner-cache.service";
 import { needsCheckIn, getTodayCheckIn } from "@/lib/actions/daily-checkin";
 import { TodayClient } from "./today-client";
 
@@ -15,7 +16,9 @@ export default async function TodayPage() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const [workouts, checkInStatus, todayCheckIn] = await Promise.all([
+  const initialTodayDecision = await getAdaptiveDayPlannerCacheSnapshot(session.user.id, today);
+
+  const [workouts, checkInStatus, todayCheckIn, feedbackRequiredWorkout] = await Promise.all([
     db.workout.findMany({
       where: {
         userId: session.user.id,
@@ -38,6 +41,19 @@ export default async function TodayPage() {
     }),
     needsCheckIn(),
     getTodayCheckIn(),
+    db.workout.findFirst({
+      where: {
+        userId: session.user.id,
+        date: { gte: today, lt: tomorrow },
+        completed: true,
+        feedback: null,
+      },
+      orderBy: { date: "desc" },
+      select: {
+        id: true,
+        title: true,
+      },
+    }),
   ]);
 
   const checkIn = todayCheckIn as unknown as null | {
@@ -61,6 +77,19 @@ export default async function TodayPage() {
       }))}
       checkInRequired={checkInStatus.required}
       checkInWorkout={checkInStatus.workout}
+      feedbackRequiredWorkout={feedbackRequiredWorkout}
+      initialTodayDecision={
+        initialTodayDecision.payload
+          ? {
+              decision: initialTodayDecision.payload,
+              cached: true,
+              stale: initialTodayDecision.stale,
+              staleReason: initialTodayDecision.staleReason,
+              changedAt: initialTodayDecision.changedAt,
+              date: today.toISOString(),
+            }
+          : null
+      }
       todayCheckIn={
         checkIn
           ? {

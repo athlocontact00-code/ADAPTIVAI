@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Moon,
   Battery,
   Brain,
   Flame,
   AlertCircle,
-  Check,
   X,
   ChevronRight,
   ChevronLeft,
@@ -45,8 +45,23 @@ import {
   type CheckInRecommendation,
 } from "@/lib/actions/daily-checkin";
 import { trackEvent } from "@/lib/actions/analytics";
-import { decidePlanChangeProposal } from "@/lib/actions/plan-rigidity";
 import { calculateReadinessScore, type MuscleSoreness } from "@/lib/services/daily-checkin.service";
+import {
+  AdaptiveDayPlannerPreview,
+  AdaptiveDayPlannerReasonChips,
+} from "@/components/adaptive-day-planner-preview";
+import { AdaptivePlannerStatusCluster } from "@/components/adaptive-planner-status-cluster";
+import {
+  getCheckinResultBannerCopy,
+  getCheckinResultFooterMode,
+  shouldShowCheckinOverrideReason,
+  type CheckinResultResolution,
+} from "@/lib/product/checkin-result-ui";
+import {
+  getPlanAdaptationActionCopy,
+  getPlanAdaptationOutcomeCopy,
+  getPlanAdaptationReviewHref,
+} from "@/lib/product/plan-adaptation-ui";
 import { cn } from "@/lib/utils";
 
 interface DailyCheckInModalProps {
@@ -78,16 +93,17 @@ export function DailyCheckInModal({
   workout,
   onComplete,
 }: DailyCheckInModalProps) {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("sleep");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recommendation, setRecommendation] = useState<CheckInRecommendation | null>(null);
   const [checkInId, setCheckInId] = useState<string | null>(null);
   const [readinessScore, setReadinessScore] = useState<number | null>(null);
   const [overrideReason, setOverrideReason] = useState<string>("");
-  const [proposalId, setProposalId] = useState<string | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "error" | "done">("idle");
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [autoApplied, setAutoApplied] = useState(false);
+  const [resultResolution, setResultResolution] = useState<CheckinResultResolution>(null);
   const [appliedWorkoutId, setAppliedWorkoutId] = useState<string | null>(null);
   const [undoing, setUndoing] = useState(false);
 
@@ -108,10 +124,10 @@ export function DailyCheckInModal({
     setCheckInId(null);
     setReadinessScore(null);
     setOverrideReason("");
-    setProposalId(null);
     setAnalysisStatus("idle");
     setAnalysisError(null);
     setAutoApplied(false);
+    setResultResolution(null);
     setAppliedWorkoutId(null);
     setUndoing(false);
     setIsSubmitting(false);
@@ -124,25 +140,6 @@ export function DailyCheckInModal({
     setStressLevel(2);
     setNotes("");
   }, [open]);
-
-  const handleProposalDecision = async (decision: "ACCEPT" | "DECLINE") => {
-    if (!proposalId) return;
-    setIsSubmitting(true);
-    try {
-      const result = await decidePlanChangeProposal({ proposalId, decision });
-      if (result.success) {
-        toast.success(decision === "ACCEPT" ? "Change applied" : "Change declined");
-        onComplete?.();
-        onOpenChange(false);
-      } else {
-        toast.error(result.error || "Failed to decide proposal");
-      }
-    } catch {
-      toast.error("An error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Form state
   const [sleepDuration, setSleepDuration] = useState(7);
@@ -181,7 +178,6 @@ export function DailyCheckInModal({
 
   const readinessTone =
     readinessPreview >= 70 ? "text-emerald-400" : readinessPreview >= 45 ? "text-amber-400" : "text-red-400";
-
   const previewFactors = useMemo(() => {
     const factors: string[] = [];
     if (sleepDuration < 6) factors.push("sleep low");
@@ -194,6 +190,21 @@ export function DailyCheckInModal({
     if (mentalReadiness <= 2) factors.push("mental readiness low");
     return factors.slice(0, 3);
   }, [sleepDuration, sleepQuality, physicalFatigue, muscleSoreness, stressLevel, motivation, mentalReadiness]);
+  const resultBanner = getCheckinResultBannerCopy(resultResolution);
+  const showOverrideReason = shouldShowCheckinOverrideReason({
+    recommendation,
+    autoApplied,
+  });
+  const resultFooterMode = getCheckinResultFooterMode({
+    recommendation,
+    autoApplied,
+    proposalId: null,
+    analysisStatus,
+  });
+  const adaptationActionCopy = getPlanAdaptationActionCopy({
+    requiresConfirmation: recommendation?.changes.requires_confirmation,
+    hasUpdatedWorkout: Boolean(appliedWorkoutId),
+  });
 
   const steps: Step[] = ["sleep", "body", "mind", "result"];
   const currentStepIndex = steps.indexOf(step);
@@ -233,6 +244,7 @@ export function DailyCheckInModal({
     setIsSubmitting(true);
     setAnalysisStatus("loading");
     setAnalysisError(null);
+    setResultResolution(null);
     try {
       const input: SaveCheckInInput = {
         sleepDuration,
@@ -268,10 +280,16 @@ export function DailyCheckInModal({
           result.recommendation.recommendation_type !== "keep"
         ) {
           const apply = await acceptAIRecommendation(result.checkInId);
-          if (apply.success && apply.applied) {
+          if (apply.success && apply.proposalId) {
+            toast.success(getPlanAdaptationOutcomeCopy({ proposalCreated: true }).toast);
+            onComplete?.();
+            onOpenChange(false);
+            router.push(getPlanAdaptationReviewHref({ proposalId: apply.proposalId }));
+          } else if (apply.success && apply.applied) {
             setAutoApplied(true);
+            setResultResolution("AUTO_APPLIED");
             setAppliedWorkoutId(apply.workoutId ?? null);
-            toast.success("Workout adapted based on your check-in");
+            toast.success(getPlanAdaptationOutcomeCopy({ proposalCreated: false }).toast);
             onComplete?.();
           }
         }
@@ -288,18 +306,20 @@ export function DailyCheckInModal({
   const handleAccept = async () => {
     if (!checkInId) return;
     setIsSubmitting(true);
+    setResultResolution(null);
     try {
       const result = await acceptAIRecommendation(checkInId);
       if (result.success) {
         if (result.proposalId) {
-          setProposalId(result.proposalId);
-          toast.message("Plan is locked", {
-            description: "A proposal was created. Accept or decline to continue.",
-          });
+          toast.success(getPlanAdaptationOutcomeCopy({ proposalCreated: true }).toast);
+          onComplete?.();
+          onOpenChange(false);
+          router.push(getPlanAdaptationReviewHref({ proposalId: result.proposalId }));
         } else if (result.applied) {
           setAutoApplied(true);
+          setResultResolution("AUTO_APPLIED");
           setAppliedWorkoutId(result.workoutId ?? null);
-          toast.success("Workout adapted based on your check-in");
+          toast.success(getPlanAdaptationOutcomeCopy({ proposalCreated: false }).toast);
         } else {
           toast.success("Recommendation accepted");
           onComplete?.();
@@ -318,6 +338,7 @@ export function DailyCheckInModal({
   const handleOverride = async () => {
     if (!checkInId) return;
     setIsSubmitting(true);
+    setResultResolution(null);
     try {
       const reason = overrideReason.trim().length > 0 ? overrideReason.trim() : undefined;
       const result = await overrideAIRecommendation(checkInId, reason);
@@ -343,6 +364,7 @@ export function DailyCheckInModal({
       if (result.success) {
         toast.success("Workout changes undone");
         setAutoApplied(false);
+        setResultResolution("UNDONE");
         setAppliedWorkoutId(null);
         onComplete?.();
       } else {
@@ -402,50 +424,54 @@ export function DailyCheckInModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[100dvh] overflow-y-auto scroll-touch safe-area-inset-bottom">
-        <DialogHeader>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1">
-              <DialogTitle className="flex items-center gap-2">
-                <Battery className="h-5 w-5 text-primary" />
-                Pre-training check-in
-              </DialogTitle>
-              <DialogDescription className="text-sm">
-                {workoutDate.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                })}{" "}
-                • {workout.title}
-              </DialogDescription>
-            </div>
-            <Badge variant="outline" className="h-6 px-2 capitalize">
-              {workout.type}
-            </Badge>
-          </div>
-        </DialogHeader>
-
-        {/* Progress indicator */}
-        {step !== "result" && (
-          <div className="flex flex-wrap items-center gap-3 mb-4 text-xs text-muted-foreground">
-            {steps.slice(0, -1).map((s, i) => (
-              <div key={s} className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "h-6 w-6 rounded-full border text-[10px] font-semibold grid place-items-center",
-                    i <= currentStepIndex ? "border-primary text-primary" : "border-border text-muted-foreground"
-                  )}
-                >
-                  {i + 1}
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden max-h-[100dvh]">
+        <div className="flex flex-col max-h-[100dvh]">
+          <div className="shrink-0 p-6 border-b border-border/50 safe-area-top">
+            <DialogHeader>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <DialogTitle className="flex items-center gap-2">
+                    <Battery className="h-5 w-5 text-primary" />
+                    Pre-training check-in
+                  </DialogTitle>
+                  <DialogDescription className="text-sm">
+                    {workoutDate.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      month: "short",
+                      day: "numeric",
+                    })}{" "}
+                    • {workout.title}
+                  </DialogDescription>
                 </div>
-                <span className={cn(i <= currentStepIndex && "text-foreground")}>{stepLabels[s]}</span>
-                {i < steps.length - 2 && <div className="h-px w-6 bg-border/50" />}
+                <Badge variant="outline" className="h-6 px-2 capitalize">
+                  {workout.type}
+                </Badge>
               </div>
-            ))}
-          </div>
-        )}
+            </DialogHeader>
 
-        {step === "result" ? (
+            {/* Progress indicator */}
+            {step !== "result" && (
+              <div className="flex flex-wrap items-center gap-3 mt-4 text-xs text-muted-foreground">
+                {steps.slice(0, -1).map((s, i) => (
+                  <div key={s} className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "h-6 w-6 rounded-full border text-[10px] font-semibold grid place-items-center",
+                        i <= currentStepIndex ? "border-primary text-primary" : "border-border text-muted-foreground"
+                      )}
+                    >
+                      {i + 1}
+                    </div>
+                    <span className={cn(i <= currentStepIndex && "text-foreground")}>{stepLabels[s]}</span>
+                    {i < steps.length - 2 && <div className="h-px w-6 bg-border/50" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-touch p-6 safe-area-inset-bottom">
+            {step === "result" ? (
           <div className="space-y-6">
             {analysisStatus === "error" && (
               <Card className="border border-danger-subtle bg-danger-subtle">
@@ -467,44 +493,6 @@ export function DailyCheckInModal({
               </Card>
             )}
 
-            {proposalId && (
-              <Card className="border-2 border-amber-500/40 bg-amber-500/10">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
-                    <div className="flex-1">
-                      <div className="font-semibold">Plan locked — proposal required</div>
-                      <div className="text-sm text-muted-foreground">
-                        Your plan rigidity prevents automatic changes. Review and decide.
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => handleProposalDecision("DECLINE")}
-                      disabled={isSubmitting}
-                    >
-                      Decline
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      onClick={() => handleProposalDecision("ACCEPT")}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4 mr-2" />
-                      )}
-                      Accept Change
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)]">
               <div className="space-y-4">
                 <Card className="border border-subtle bg-muted/10">
@@ -516,10 +504,17 @@ export function DailyCheckInModal({
                           {readinessScore ?? "—"}
                         </div>
                       </div>
-                      <Badge variant="outline" className="h-6 px-2">
-                        {recommendation?.recommendation_type?.replace(/_/g, " ") ?? "keep"}
-                      </Badge>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Badge variant="outline" className="h-6 px-2">
+                          {recommendation?.recommendation_type?.replace(/_/g, " ") ?? "keep"}
+                        </Badge>
+                      </div>
                     </div>
+                    <AdaptivePlannerStatusCluster
+                      decision={recommendation?.planner?.decision}
+                      state={recommendation?.planner?.state}
+                      extraBadges={null}
+                    />
                     {recommendation?.key_factors?.length ? (
                       <div className="flex flex-wrap gap-2">
                         {recommendation.key_factors.map((f) => (
@@ -532,6 +527,7 @@ export function DailyCheckInModal({
                     <div className="text-sm text-muted-foreground">
                       {recommendation?.explanation ? toThreeSentences(recommendation.explanation) : "Summary unavailable."}
                     </div>
+                    <AdaptiveDayPlannerReasonChips reasons={recommendation?.planner?.reasons} />
                   </CardContent>
                 </Card>
 
@@ -583,6 +579,14 @@ export function DailyCheckInModal({
                     </CardContent>
                   </Card>
                 )}
+
+                {recommendation?.planner?.patchPreview?.items?.length ? (
+                  <Card className="border border-subtle bg-muted/10">
+                    <CardContent className="p-4">
+                      <AdaptiveDayPlannerPreview preview={recommendation.planner.patchPreview} />
+                    </CardContent>
+                  </Card>
+                ) : null}
               </div>
 
               <Card className="border border-subtle bg-muted/10">
@@ -591,17 +595,33 @@ export function DailyCheckInModal({
                   <div className="text-sm text-foreground">
                     {recommendation?.coach_message ?? "Your coach will adjust once signals are available."}
                   </div>
-                  {autoApplied && (
-                    <div className="rounded-control border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
-                      <div className="font-medium text-emerald-400">Changes applied</div>
+                  {resultBanner && (
+                    <div
+                      className={cn(
+                        "rounded-control border p-3 text-xs",
+                        resultBanner.tone === "success"
+                          ? "border-emerald-500/30 bg-emerald-500/10"
+                          : "border-border/60 bg-muted/30"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "font-medium",
+                          resultBanner.tone === "success" ? "text-emerald-400" : "text-foreground"
+                        )}
+                      >
+                        {resultBanner.title}
+                      </div>
                       <div className="text-muted-foreground">
-                        You can undo if this doesn&apos;t feel right.
+                        {resultBanner.description}
                       </div>
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="outline" onClick={handleUndo} disabled={undoing}>
-                          {undoing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                          Undo
-                        </Button>
+                        {autoApplied ? (
+                          <Button size="sm" variant="outline" onClick={handleUndo} disabled={undoing}>
+                            {undoing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                            Undo
+                          </Button>
+                        ) : null}
                         {appliedWorkoutId ? (
                           <Button
                             size="sm"
@@ -609,7 +629,7 @@ export function DailyCheckInModal({
                               window.location.href = `/calendar?workoutId=${encodeURIComponent(appliedWorkoutId)}`;
                             }}
                           >
-                            View updated workout
+                            {adaptationActionCopy.viewWorkoutLabel}
                           </Button>
                         ) : null}
                       </div>
@@ -619,7 +639,7 @@ export function DailyCheckInModal({
               </Card>
             </div>
 
-            {recommendation?.changes?.apply && !autoApplied && (
+            {showOverrideReason && (
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Override reason (optional)</Label>
                 <Textarea
@@ -631,9 +651,9 @@ export function DailyCheckInModal({
               </div>
             )}
 
-            {analysisStatus !== "error" && (
+            {resultFooterMode !== "NONE" && (
               <div className="flex flex-wrap gap-3 pt-2">
-                {recommendation?.changes?.apply && !autoApplied && !proposalId ? (
+                {resultFooterMode === "DECIDE" ? (
                   <>
                     <Button
                       onClick={handleAccept}
@@ -644,13 +664,11 @@ export function DailyCheckInModal({
                       ) : (
                         <Sparkles className="h-4 w-4 mr-2" />
                       )}
-                      {recommendation.changes.requires_confirmation
-                        ? "Review & Accept Changes"
-                        : "Apply changes"}
+                      {adaptationActionCopy.applyLabel}
                     </Button>
                     <Button variant="outline" onClick={handleOverride} disabled={isSubmitting}>
                       <X className="h-4 w-4 mr-2" />
-                      Keep original
+                      {adaptationActionCopy.keepLabel}
                     </Button>
                   </>
                 ) : (
@@ -660,7 +678,7 @@ export function DailyCheckInModal({
                       window.location.href = `/calendar?workoutId=${encodeURIComponent(appliedWorkoutId ?? workout.id)}`;
                     }}
                   >
-                    View workout
+                    {adaptationActionCopy.viewWorkoutLabel}
                   </Button>
                 )}
               </div>
@@ -952,38 +970,42 @@ export function DailyCheckInModal({
             </div>
           </div>
         )}
-
-        {/* Navigation */}
-        {step !== "result" && (
-          <div className="flex justify-between pt-4">
-            <Button
-              variant="ghost"
-              onClick={handleBack}
-              disabled={currentStepIndex === 0}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <Button
-              onClick={handleNext}
-              disabled={!canProceed() || isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Analyzing your readiness and today&apos;s session...
-                </>
-              ) : step === "mind" ? (
-                "Get AI Recommendation"
-              ) : (
-                <>
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </>
-              )}
-            </Button>
           </div>
-        )}
+
+          {/* Navigation (sticky footer, iOS-safe) */}
+          {step !== "result" && (
+            <div className="shrink-0 p-4 border-t border-border/50 flex items-center justify-between gap-3 safe-area-inset-bottom">
+              <Button
+                variant="ghost"
+                onClick={handleBack}
+                disabled={currentStepIndex === 0 || isSubmitting}
+                className="min-h-[44px]"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={!canProceed() || isSubmitting}
+                className="min-h-[44px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing your readiness and today&apos;s session...
+                  </>
+                ) : step === "mind" ? (
+                  "Get AI Recommendation"
+                ) : (
+                  <>
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

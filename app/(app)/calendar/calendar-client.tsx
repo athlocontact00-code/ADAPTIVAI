@@ -65,12 +65,42 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { EmptyState, MetricCard, SectionHeader } from "@/components/ui-extensions";
+import { ActionCard, EmptyState, MetricCard, SectionHeader } from "@/components/ui-extensions";
 import { formatHours, formatTSS, formatPercent } from "@/lib/utils/format";
+import { getDailyFlowCopy, resolveDailyFlowStage } from "@/lib/product/daily-flow";
 import { cn, formatLocalDateInput } from "@/lib/utils";
 import { addDays, startOfWeek, isSameDay } from "@/lib/utils";
 import { DailyCheckInModal } from "@/components/daily-checkin-modal";
 import { WorkoutFeedbackModal } from "@/components/workout-feedback-modal";
+import { TodayDecisionInlineStatus } from "@/components/today-decision-inline-status";
+import { TodayDecisionSheet } from "@/components/today-decision-sheet";
+import { PendingCoachChangesBanner } from "@/components/coach/pending-coach-changes-banner";
+import { CoachReviewContextCard } from "@/components/calendar/coach-review-context-card";
+import { CoachReviewNextStepCard } from "@/components/calendar/coach-review-next-step-card";
+import type { TodayDecisionPayload, TodayDecisionSnapshot } from "@/components/today-decision-sheet";
+import { getTodayDecisionStaleBadgeCopy } from "@/lib/product/today-decision-staleness";
+import type { CoachPendingChangeSummary } from "@/lib/product/coach-pending-changes";
+import {
+  getPlanAdaptationActionCopy,
+  getPlanAdaptationDecisionToast,
+  getPlanAdaptationReviewContextCopy,
+} from "@/lib/product/plan-adaptation-ui";
+import {
+  buildCalendarDetailUrl,
+  clearCalendarProposalReviewContext,
+  shouldShowCalendarProposalReviewContext,
+} from "@/lib/product/calendar-proposal-review";
+import {
+  clearCalendarCoachReviewContext,
+  shouldShowCalendarCoachReviewContext,
+  type CalendarCoachReviewContext,
+} from "@/lib/product/calendar-coach-review";
+import { buildResolvedCoachReviewUrl } from "@/lib/product/coach-review-context";
+import {
+  getCoachReviewApplyToast,
+  getCoachReviewDismissToast,
+  getCoachReviewManualResolutionToast,
+} from "@/lib/product/coach-review-outcome";
 import { WorkoutPlanEditorModal } from "@/components/workout/workout-plan-editor-modal";
 import { PlanRenderer, PlanTextRenderer } from "@/components/workout/plan-renderer";
 import { convertPrescriptionV1ToStructured, parseWorkoutPlanJson } from "@/lib/plans/compat";
@@ -631,6 +661,9 @@ type CalendarSidePanelProps = {
   onQuickAdd: (date: Date, type: string) => void;
   onOpenCheckIn: (workout: Workout) => void;
   onGenerateWeekPlan: () => void;
+  coachReviewContext: CalendarCoachReviewContext | null;
+  resolvedCoachReviewContext: CalendarCoachReviewContext | null;
+  onOpenTodayDecision: () => void;
 };
 
 const CalendarSidePanel = memo(({
@@ -654,6 +687,9 @@ const CalendarSidePanel = memo(({
   onQuickAdd,
   onOpenCheckIn,
   onGenerateWeekPlan,
+  coachReviewContext,
+  resolvedCoachReviewContext,
+  onOpenTodayDecision,
 }: CalendarSidePanelProps) => {
   const t = useTranslations("calendar");
   const readiness = getReadinessTone(dayCheckIn?.readinessScore ?? null);
@@ -746,6 +782,16 @@ const CalendarSidePanel = memo(({
                   </div>
                 )}
               </div>
+
+              {coachReviewContext ? <CoachReviewContextCard context={coachReviewContext} compact /> : null}
+              {resolvedCoachReviewContext ? (
+                <CoachReviewNextStepCard
+                  context={resolvedCoachReviewContext}
+                  isToday={isTodaySelected}
+                  onPrimaryAction={onOpenTodayDecision}
+                  compact
+                />
+              ) : null}
 
               <div className="rounded-card border border-subtle bg-muted/10 p-3 space-y-3">
                 <SectionHeader
@@ -1066,7 +1112,22 @@ interface CalendarClientProps {
   }>;
   initialFeedbackWorkoutIds: string[];
   initialMonthDate: Date;
+  initialSelectedDate?: Date | null;
   initialOpenWorkoutId?: string | null;
+  initialCoachSuggestionReview?: CalendarCoachReviewContext | null;
+  initialProposalReview?: {
+    proposalId: string;
+    summary: string | null;
+  } | null;
+  initialTodayDecision?: {
+    decision: TodayDecisionPayload;
+    cached: boolean;
+    stale?: boolean;
+    staleReason?: "CHECKIN_UPDATED" | "WORKOUT_UPDATED" | null;
+    changedAt?: string | null;
+    date: string;
+  } | null;
+  coachPendingChanges?: CoachPendingChangeSummary | null;
 }
 
 export function CalendarClient({
@@ -1075,7 +1136,12 @@ export function CalendarClient({
   initialCheckIns,
   initialFeedbackWorkoutIds,
   initialMonthDate,
+  initialSelectedDate,
   initialOpenWorkoutId,
+  initialCoachSuggestionReview,
+  initialProposalReview,
+  initialTodayDecision,
+  coachPendingChanges,
 }: CalendarClientProps) {
   const router = useRouter();
   const t = useTranslations("calendar");
@@ -1088,8 +1154,11 @@ export function CalendarClient({
   const [monthDate, setMonthDate] = useState<Date>(new Date(initialMonthDate));
   const [isMonthLoading, setIsMonthLoading] = useState(false);
 
-  const [selectedWeekStart, setSelectedWeekStart] = useState<Date>(() => startOfWeek(new Date(initialMonthDate)));
+  const [selectedWeekStart, setSelectedWeekStart] = useState<Date>(() =>
+    startOfWeek(new Date(initialSelectedDate ?? initialMonthDate))
+  );
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    if (initialSelectedDate) return new Date(initialSelectedDate);
     const initial = new Date(initialMonthDate);
     const today = new Date();
     return today.getMonth() === initial.getMonth() && today.getFullYear() === initial.getFullYear()
@@ -1127,6 +1196,18 @@ export function CalendarClient({
   >([]);
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalDecisionLoading, setProposalDecisionLoading] = useState<"ACCEPT" | "DECLINE" | null>(null);
+  const [proposalReviewContext, setProposalReviewContext] = useState<{
+    proposalId: string;
+    summary: string | null;
+  } | null>(initialProposalReview ?? null);
+  const [coachReviewContext, setCoachReviewContext] = useState<CalendarCoachReviewContext | null>(
+    initialCoachSuggestionReview ?? null
+  );
+  const [resolvedCoachReviewContext, setResolvedCoachReviewContext] = useState<CalendarCoachReviewContext | null>(null);
+  const proposalActionCopy = getPlanAdaptationActionCopy({});
+  const proposalReviewCopy = proposalReviewContext
+    ? getPlanAdaptationReviewContextCopy(proposalReviewContext.summary)
+    : null;
 
   const [formData, setFormData] = useState({
     title: "",
@@ -1143,6 +1224,59 @@ export function CalendarClient({
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [feedbackWorkout, setFeedbackWorkout] = useState<Workout | null>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [todayDecisionOpen, setTodayDecisionOpen] = useState(false);
+  const [plannerRefreshKey, setPlannerRefreshKey] = useState(0);
+  const [todayDecisionData, setTodayDecisionData] = useState<TodayDecisionSnapshot | null>(initialTodayDecision ?? null);
+
+  const refreshPlanner = useCallback(() => {
+    setPlannerRefreshKey((value) => value + 1);
+  }, []);
+
+  const replaceCalendarDetailUrl = useCallback(
+    (workoutId?: string | null) => {
+      if (typeof window === "undefined") return;
+      router.replace(
+        buildCalendarDetailUrl({
+          currentUrl: window.location.href,
+          workoutId,
+        })
+      );
+    },
+    [router]
+  );
+
+  const clearActiveCoachReview = useCallback(
+    (actedDate: Date | string, workoutId?: string | null) => {
+      if (!coachReviewContext) return false;
+      const nextContext = clearCalendarCoachReviewContext(coachReviewContext, actedDate);
+      if (nextContext === coachReviewContext) return false;
+      setResolvedCoachReviewContext(coachReviewContext);
+      setCoachReviewContext(nextContext);
+      replaceCalendarDetailUrl(workoutId ?? workoutDetail?.id ?? null);
+      return true;
+    },
+    [coachReviewContext, replaceCalendarDetailUrl, workoutDetail?.id]
+  );
+
+  useEffect(() => {
+    setTodayDecisionData(initialTodayDecision ?? null);
+  }, [initialTodayDecision]);
+
+  useEffect(() => {
+    setProposalReviewContext(initialProposalReview ?? null);
+  }, [initialProposalReview]);
+
+  useEffect(() => {
+    setCoachReviewContext(initialCoachSuggestionReview ?? null);
+    setResolvedCoachReviewContext(null);
+  }, [initialCoachSuggestionReview]);
+
+  useEffect(() => {
+    if (!initialSelectedDate) return;
+    const next = new Date(initialSelectedDate);
+    setSelectedDate(next);
+    setSelectedWeekStart(getWeekStartForDate(next));
+  }, [initialSelectedDate]);
 
   async function loadMonth(nextMonthDate: Date) {
     setIsMonthLoading(true);
@@ -1283,6 +1417,18 @@ export function CalendarClient({
   );
 
   const selectedDayKey = formatLocalDateInput(selectedDate);
+  const visibleCoachReviewContext = shouldShowCalendarCoachReviewContext({
+    context: coachReviewContext,
+    selectedDate,
+  })
+    ? coachReviewContext
+    : null;
+  const visibleResolvedCoachReviewContext = shouldShowCalendarCoachReviewContext({
+    context: resolvedCoachReviewContext,
+    selectedDate,
+  })
+    ? resolvedCoachReviewContext
+    : null;
   const selectedDayWorkouts = workoutsByDate.get(selectedDayKey) ?? [];
   const selectedDayCheckIn = checkInsByDate.get(selectedDayKey) ?? null;
   const selectedDayPrimaryWorkout =
@@ -1332,6 +1478,24 @@ export function CalendarClient({
   function getCheckInForDate(date: Date) {
     return checkInsByDate.get(formatLocalDateInput(date)) ?? null;
   }
+
+  const calendarToday = new Date();
+  calendarToday.setHours(0, 0, 0, 0);
+  const todayCalendarWorkouts = getWorkoutsForDate(calendarToday);
+  const todayCalendarCheckIn = getCheckInForDate(calendarToday);
+  const todayPlannedWorkout = todayCalendarWorkouts.find((w) => w.planned && !w.completed) ?? null;
+  const todayCompletedWorkout = todayCalendarWorkouts.find((w) => w.completed) ?? null;
+  const todayFeedbackWorkout = todayCalendarWorkouts.find((w) => w.completed && !hasFeedback(w.id)) ?? null;
+  const todayCalendarFlowStage = resolveDailyFlowStage({
+    hasPlannedWorkout: Boolean(todayPlannedWorkout),
+    hasCompletedWorkout: Boolean(todayCompletedWorkout),
+    requiresCheckIn: Boolean(todayPlannedWorkout && !todayCalendarCheckIn),
+    hasCheckIn: Boolean(todayCalendarCheckIn),
+    hasFeedbackPending: Boolean(todayFeedbackWorkout),
+  });
+  const todayCalendarFlowCopy = getDailyFlowCopy(todayCalendarFlowStage, {
+    workoutTitle: todayFeedbackWorkout?.title ?? todayPlannedWorkout?.title ?? todayCompletedWorkout?.title ?? null,
+  });
 
   async function refreshGate() {
     if (!workoutDetail) return;
@@ -1401,7 +1565,16 @@ export function CalendarClient({
         return;
       }
 
-      toast.success(decision === "ACCEPT" ? t("changeApplied") : t("changeDeclined"));
+      const resolvedCoachReview = clearActiveCoachReview(selectedDate, workoutDetail?.id ?? null);
+      toast.success(
+        resolvedCoachReview
+          ? decision === "ACCEPT"
+            ? getCoachReviewApplyToast()
+            : getCoachReviewDismissToast()
+          : getPlanAdaptationDecisionToast(decision)
+      );
+      setProposalReviewContext((prev) => clearCalendarProposalReviewContext(prev, proposalId));
+      refreshPlanner();
       const res = await getCalendarMonthData(formatLocalDateInput(new Date(monthDate)));
       if (res.success && res.data) {
         setMonthDate(new Date(res.data.monthStart));
@@ -1414,6 +1587,9 @@ export function CalendarClient({
           const updated = (res.data.workouts as unknown as Workout[]).find((w) => w.id === workoutDetail.id) || null;
           setWorkoutDetail(updated);
           if (!updated) setWorkoutDetailOpen(false);
+          replaceCalendarDetailUrl(updated?.id ?? null);
+        } else {
+          replaceCalendarDetailUrl(null);
         }
       }
     } catch {
@@ -1598,6 +1774,37 @@ export function CalendarClient({
     setShowCheckInModal(true);
   }, []);
 
+  const todayCalendarPrimaryAction = (() => {
+    if (todayCalendarFlowStage === "FEEDBACK_REQUIRED" && todayFeedbackWorkout) {
+      return {
+        label: "Add feedback",
+        onClick: () => openFeedbackForWorkout(todayFeedbackWorkout),
+      };
+    }
+    if (todayCalendarFlowStage === "CHECKIN_REQUIRED" && todayPlannedWorkout) {
+      return {
+        label: "Open check-in",
+        onClick: () => openCheckInForWorkout(todayPlannedWorkout),
+      };
+    }
+    if (todayCalendarFlowStage === "READY_TO_TRAIN" && todayPlannedWorkout) {
+      return {
+        label: "Open workout",
+        onClick: () => openWorkoutDetail(todayPlannedWorkout),
+      };
+    }
+    if (todayCalendarFlowStage === "DAY_COMPLETE" && todayCompletedWorkout) {
+      return {
+        label: "Review session",
+        onClick: () => openWorkoutDetail(todayCompletedWorkout),
+      };
+    }
+    return {
+      label: "Add workout",
+      onClick: () => openNewWorkout(calendarToday),
+    };
+  })();
+
   const weekPlanPrefill = useMemo(() => {
     const startIso = formatLocalDateInput(selectedWeekStart);
     return [
@@ -1728,7 +1935,14 @@ export function CalendarClient({
         throw new Error(responseBody?.error || "Failed to save workout");
       }
 
-      toast.success(editingWorkout ? "Workout updated" : "Workout created");
+      const resolvedCoachReview = clearActiveCoachReview(selectedDate, editingWorkout?.id ?? null);
+      toast.success(
+        resolvedCoachReview
+          ? getCoachReviewManualResolutionToast()
+          : editingWorkout
+            ? "Workout updated"
+            : "Workout created"
+      );
       setIsDialogOpen(false);
 
       // Refetch month data to ensure UI reflects DB state (incl. multiple workouts per day)
@@ -1740,6 +1954,8 @@ export function CalendarClient({
         setFeedbackWorkoutIds(new Set(refreshed.data.feedbackWorkoutIds || []));
         setSelectedWeekStart(startOfWeek(new Date(refreshed.data.monthStart)));
       }
+
+      refreshPlanner();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to save workout";
       toast.error(msg);
@@ -1752,12 +1968,21 @@ export function CalendarClient({
     try {
       const res = await fetch(`/api/workouts/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
+      const deletedWorkout = workouts.find((w) => w.id === id) ?? null;
       setWorkouts((prev) => prev.filter((w) => w.id !== id));
-      toast.success("Workout deleted");
+      const resolvedCoachReview = deletedWorkout
+        ? clearActiveCoachReview(new Date(deletedWorkout.date))
+        : false;
+      if (deletedWorkout) {
+        toast.success(resolvedCoachReview ? getCoachReviewManualResolutionToast() : "Workout deleted");
+      } else {
+        toast.success("Workout deleted");
+      }
+      refreshPlanner();
     } catch {
       toast.error("Failed to delete workout");
     }
-  }, []);
+  }, [clearActiveCoachReview, refreshPlanner, workouts]);
 
   const toggleComplete = useCallback(async (workout: Workout) => {
     try {
@@ -1769,7 +1994,15 @@ export function CalendarClient({
       if (!res.ok) throw new Error("Failed to update");
       const updated = await res.json();
       setWorkouts((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
-      toast.success(updated.completed ? "Marked complete" : "Marked incomplete");
+      const resolvedCoachReview = clearActiveCoachReview(new Date(updated.date), updated.id);
+      refreshPlanner();
+      toast.success(
+        resolvedCoachReview
+          ? getCoachReviewManualResolutionToast()
+          : updated.completed
+            ? "Marked complete"
+            : "Marked incomplete"
+      );
 
       // After completion, prompt for post-workout feedback (new system)
       if (updated.completed) {
@@ -1779,7 +2012,7 @@ export function CalendarClient({
     } catch {
       toast.error("Failed to update workout");
     }
-  }, []);
+  }, [clearActiveCoachReview, refreshPlanner]);
 
   return (
     <div className="page-container space-y-4 sm:space-y-6 overflow-x-hidden pt-1">
@@ -1826,6 +2059,55 @@ export function CalendarClient({
           </Button>
         </div>
       </div>
+
+      <ActionCard
+        title="Today in Calendar"
+        subtitle={todayCalendarFlowCopy.title}
+        primary={todayCalendarPrimaryAction}
+        secondary={{ label: "Today", href: "/today", variant: "outline" }}
+        badges={
+          <>
+            <Badge variant={todayCalendarFlowCopy.badgeVariant} className="h-6 px-2">
+              {todayCalendarFlowCopy.badgeLabel}
+            </Badge>
+            {todayDecisionData?.stale ? (
+              <Badge variant="warning" className="h-6 px-2">
+                {getTodayDecisionStaleBadgeCopy(todayDecisionData.staleReason)}
+              </Badge>
+            ) : null}
+          </>
+        }
+        density="compact"
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-foreground/90">{todayCalendarFlowCopy.summary}</div>
+          {coachPendingChanges ? (
+            <PendingCoachChangesBanner summary={coachPendingChanges} compact />
+          ) : null}
+          <TodayDecisionInlineStatus
+            stale={todayDecisionData?.stale}
+            staleReason={todayDecisionData?.staleReason}
+            changedAt={todayDecisionData?.changedAt}
+            generatedAt={todayDecisionData?.decision.generatedAt}
+            cached={todayDecisionData?.cached}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-primary border-primary/30 hover:bg-primary/5"
+            onClick={() => setTodayDecisionOpen(true)}
+          >
+            What should I do today?
+          </Button>
+        </div>
+      </ActionCard>
+      <TodayDecisionSheet
+        open={todayDecisionOpen}
+        onOpenChange={setTodayDecisionOpen}
+        refreshKey={plannerRefreshKey}
+        initialData={todayDecisionData}
+        onDataChange={setTodayDecisionData}
+      />
 
       {/* MOBILE (<md): practical Day + Week views */}
       <div className="md:hidden space-y-3">
@@ -1936,6 +2218,28 @@ export function CalendarClient({
 
             {/* Agenda list */}
             <div className="space-y-2">
+              {visibleCoachReviewContext ? (
+                <CoachReviewContextCard context={visibleCoachReviewContext} compact />
+              ) : null}
+              {visibleResolvedCoachReviewContext ? (
+                <CoachReviewNextStepCard
+                  context={visibleResolvedCoachReviewContext}
+                  isToday={isSameDay(selectedDate, new Date())}
+                  onPrimaryAction={() => {
+                    if (isSameDay(selectedDate, new Date())) {
+                      setTodayDecisionOpen(true);
+                      return;
+                    }
+                    router.push(
+                      buildResolvedCoachReviewUrl({
+                        suggestionId: visibleResolvedCoachReviewContext.suggestionId,
+                        contextDate: visibleResolvedCoachReviewContext.contextDate,
+                      })
+                    );
+                  }}
+                  compact
+                />
+              ) : null}
               <SectionHeader
                 title={isSameDay(selectedDate, new Date()) ? "Today" : "Selected day"}
                 subtitle={`${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
@@ -2218,6 +2522,22 @@ export function CalendarClient({
             onQuickAdd={openQuickAdd}
             onOpenCheckIn={openCheckInForWorkout}
             onGenerateWeekPlan={handleGenerateWeekPlan}
+            coachReviewContext={visibleCoachReviewContext}
+            resolvedCoachReviewContext={visibleResolvedCoachReviewContext}
+            onOpenTodayDecision={() => {
+              if (isSameDay(selectedDate, new Date())) {
+                setTodayDecisionOpen(true);
+                return;
+              }
+              if (visibleResolvedCoachReviewContext) {
+                router.push(
+                  buildResolvedCoachReviewUrl({
+                    suggestionId: visibleResolvedCoachReviewContext.suggestionId,
+                    contextDate: visibleResolvedCoachReviewContext.contextDate,
+                  })
+                );
+              }
+            }}
           />
         </div>
       </div>
@@ -2413,6 +2733,7 @@ export function CalendarClient({
                               setWorkouts((prev) =>
                                 prev.map((w) => (w.id === workoutDetail.id ? { ...w, source: "AI" } : w))
                               );
+                              refreshPlanner();
                             } else {
                               toast.error(res.error ?? "Failed to finalize");
                             }
@@ -2519,6 +2840,23 @@ export function CalendarClient({
 
               return (
                 <div className="space-y-4">
+                  {shouldShowCalendarProposalReviewContext({
+                    context: proposalReviewContext,
+                    proposalLoading,
+                    pendingProposalIds: pendingProposals.map((proposal) => proposal.id),
+                  }) ? (
+                    <div className="rounded-card border border-primary/30 bg-primary/5 p-3 text-sm">
+                      <div className="flex items-start gap-2">
+                        <ClipboardCheck className="h-4 w-4 mt-0.5 text-primary" />
+                        <div>
+                          <div className="font-medium">{proposalReviewCopy?.title}</div>
+                          <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            {proposalReviewCopy?.description}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   {(proposalLoading || pendingProposals.length > 0) && (
                     <div className="rounded-card border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm">
                       <div className="flex items-start justify-between gap-3">
@@ -2541,7 +2879,9 @@ export function CalendarClient({
                               onClick={() => decideProposal(pendingProposals[0].id, "ACCEPT")}
                               disabled={proposalDecisionLoading !== null}
                             >
-                              {proposalDecisionLoading === "ACCEPT" ? "Applying…" : "Accept"}
+                              {proposalDecisionLoading === "ACCEPT"
+                                ? proposalActionCopy.applyingLabel
+                                : proposalActionCopy.applyLabel}
                             </Button>
                             <Button
                               size="sm"
@@ -2549,7 +2889,9 @@ export function CalendarClient({
                               onClick={() => decideProposal(pendingProposals[0].id, "DECLINE")}
                               disabled={proposalDecisionLoading !== null}
                             >
-                              {proposalDecisionLoading === "DECLINE" ? "Declining…" : "Decline"}
+                              {proposalDecisionLoading === "DECLINE"
+                                ? proposalActionCopy.decliningLabel
+                                : proposalActionCopy.declineLabel}
                             </Button>
                           </div>
                         )}
@@ -2906,6 +3248,7 @@ export function CalendarClient({
           setWorkouts((prev) =>
             prev.map((x) => (x.id === activeId ? ({ ...x, ...updated } as Workout) : x))
           );
+          refreshPlanner();
         }}
       />
 
@@ -2926,6 +3269,8 @@ export function CalendarClient({
           }}
           onComplete={() => {
             refreshGate();
+            refreshPlanner();
+            void loadMonth(new Date(monthDate));
           }}
         />
       )}
@@ -2946,6 +3291,8 @@ export function CalendarClient({
               next.add(feedbackWorkout.id);
               return next;
             });
+            refreshPlanner();
+            void loadMonth(new Date(monthDate));
             if (workoutDetail?.id === feedbackWorkout.id) {
               setDetailFeedbackLoading(true);
               getFeedbackForWorkout(feedbackWorkout.id)

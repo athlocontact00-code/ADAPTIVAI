@@ -99,7 +99,7 @@ export async function POST(
     if (rigidity !== "FLEXIBLE_WEEK") {
       const locked = await anyAffectedWorkoutLocked(session.user.id, payload, rigidity);
       if (locked) {
-        await db.planChangeProposal.create({
+        const proposal = await db.planChangeProposal.create({
           data: {
             userId: session.user.id,
             sourceType: "COACH",
@@ -111,7 +111,7 @@ export async function POST(
           where: { id },
           data: { status: "APPLIED", appliedAt: new Date() },
         });
-        return NextResponse.json({ ok: true, proposalCreated: true });
+        return NextResponse.json({ ok: true, proposalCreated: true, proposalId: proposal.id });
       }
     }
 

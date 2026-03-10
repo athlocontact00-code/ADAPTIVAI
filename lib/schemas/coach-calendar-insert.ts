@@ -57,7 +57,49 @@ function payloadFromWorkoutJson(obj: z.infer<typeof workoutJsonItemSchema>): Cal
 
 /** Try to parse JSON, optionally with trailing commas removed. */
 function tryParseJson(raw: string): unknown {
-  const normalized = raw.replace(/,(\s*[}\]])/g, "$1").trim();
+  const repairMultilineStrings = (value: string): string => {
+    let out = "";
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < value.length; i++) {
+      const char = value[i];
+
+      if (escaped) {
+        out += char;
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        out += char;
+        escaped = true;
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = !inString;
+        out += char;
+        continue;
+      }
+
+      if (inString && char === "\n") {
+        out += "\\n";
+        continue;
+      }
+
+      if (inString && char === "\r") {
+        out += "\\r";
+        continue;
+      }
+
+      out += char;
+    }
+
+    return out;
+  };
+
+  const normalized = repairMultilineStrings(raw.replace(/,(\s*[}\]])/g, "$1")).trim();
   try {
     return JSON.parse(normalized) as unknown;
   } catch {

@@ -31,7 +31,9 @@ import {
 } from "@/components/ui/tooltip";
 import { DailyCheckInModal } from "@/components/daily-checkin-modal";
 import { WorkoutCompleteFlow } from "@/components/workout-complete-flow";
+import { WorkoutFeedbackModal } from "@/components/workout-feedback-modal";
 import { startWorkout } from "@/lib/actions/workout-execution";
+import { getDailyFlowCopy, resolveDailyFlowStage } from "@/lib/product/daily-flow";
 import {
   ActionCard,
   CompactToggle,
@@ -40,7 +42,13 @@ import {
   MetricCard,
   useCompactMode,
 } from "@/components/ui-extensions";
-import { TodayDecisionSheet } from "@/components/today-decision-sheet";
+import {
+  TodayDecisionSheet,
+  type TodayDecisionPayload,
+  type TodayDecisionSnapshot,
+} from "@/components/today-decision-sheet";
+import { TodayDecisionInlineStatus } from "@/components/today-decision-inline-status";
+import { getTodayDecisionStaleBadgeCopy } from "@/lib/product/today-decision-staleness";
 
 type TodayWorkout = {
   id: string;
@@ -60,6 +68,15 @@ export function TodayClient(props: {
   workouts: TodayWorkout[];
   checkInRequired: boolean;
   checkInWorkout: { id: string; title: string; type: string; duration: number; tss: number } | null;
+  feedbackRequiredWorkout: { id: string; title: string } | null;
+  initialTodayDecision?: {
+    decision: TodayDecisionPayload;
+    cached: boolean;
+    stale?: boolean;
+    staleReason?: "CHECKIN_UPDATED" | "WORKOUT_UPDATED" | null;
+    changedAt?: string | null;
+    date: string;
+  } | null;
   todayCheckIn: null | {
     id: string;
     workoutId: string | null;
@@ -78,7 +95,15 @@ export function TodayClient(props: {
   const density = compact ? "compact" : "default";
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [todayDecisionOpen, setTodayDecisionOpen] = useState(false);
+  const [plannerRefreshKey, setPlannerRefreshKey] = useState(0);
+  const [todayDecisionData, setTodayDecisionData] = useState<TodayDecisionSnapshot | null>(
+    props.initialTodayDecision ?? null
+  );
   const [startingWorkoutId, setStartingWorkoutId] = useState<string | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackWorkout, setFeedbackWorkout] = useState<null | { id: string; title: string }>(
+    props.feedbackRequiredWorkout
+  );
 
   const [weather, setWeather] = useState<
     | {
@@ -95,6 +120,11 @@ export function TodayClient(props: {
     | null
   >(null);
   const [weatherStatus, setWeatherStatus] = useState<"idle" | "loading" | "denied" | "error">("idle");
+  const refreshPlanner = () => setPlannerRefreshKey((value) => value + 1);
+
+  useEffect(() => {
+    setTodayDecisionData(props.initialTodayDecision ?? null);
+  }, [props.initialTodayDecision]);
 
   const todayLabel = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -499,6 +529,10 @@ export function TodayClient(props: {
         }
       : null);
 
+  useEffect(() => {
+    setFeedbackWorkout(props.feedbackRequiredWorkout);
+  }, [props.feedbackRequiredWorkout]);
+
   async function handleStart(workoutId: string) {
     if (props.checkInRequired && !props.todayCheckIn) {
       toast.error("Pre-training check required", { description: "Complete check-in before starting" });
@@ -534,8 +568,38 @@ export function TodayClient(props: {
           ? ("warning" as const)
           : ("danger" as const);
 
+  const plannedWorkout = props.workouts.find((w) => w.planned && !w.completed) ?? null;
+  const completedWorkout = props.workouts.find((w) => w.completed) ?? null;
+  const flowStage = resolveDailyFlowStage({
+    hasPlannedWorkout: Boolean(plannedWorkout),
+    hasCompletedWorkout: Boolean(completedWorkout),
+    requiresCheckIn: props.checkInRequired,
+    hasCheckIn: Boolean(props.todayCheckIn),
+    hasFeedbackPending: Boolean(props.feedbackRequiredWorkout),
+  });
+  const flowCopy = getDailyFlowCopy(flowStage, {
+    workoutTitle:
+      props.feedbackRequiredWorkout?.title ??
+      plannedWorkout?.title ??
+      completedWorkout?.title ??
+      props.checkInWorkout?.title ??
+      null,
+    checkInDecision: props.todayCheckIn?.aiDecision,
+  });
+
   const primaryAction = (() => {
-    if (props.checkInRequired && modalWorkout) {
+    if (flowStage === "FEEDBACK_REQUIRED" && props.feedbackRequiredWorkout) {
+      return {
+        label: "Add feedback",
+        onClick: () => {
+          setFeedbackWorkout(props.feedbackRequiredWorkout);
+          setFeedbackOpen(true);
+        },
+        variant: "default" as const,
+      };
+    }
+
+    if (flowStage === "CHECKIN_REQUIRED" && modalWorkout) {
       return {
         label: props.todayCheckIn ? "View check-in" : "Open check-in",
         onClick: () => setCheckInOpen(true),
@@ -554,6 +618,11 @@ export function TodayClient(props: {
 
     return { label: "Plan workout", href: "/calendar", variant: "default" as const };
   })();
+
+  const secondaryAction =
+    flowStage === "DAY_COMPLETE" || flowStage === "FEEDBACK_REQUIRED"
+      ? ({ label: "Dashboard", href: "/dashboard", variant: "outline" as const })
+      : ({ label: "Calendar", href: "/calendar", variant: "outline" as const });
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -581,12 +650,15 @@ export function TodayClient(props: {
         <div className="lg:col-span-7">
           <ActionCard
             title="Today"
-            subtitle={todayMeta.todayFocus}
+            subtitle={flowCopy.title}
             primary={primaryAction}
-            secondary={{ label: "Plan", href: "/calendar", variant: "outline" }}
+            secondary={secondaryAction}
             density={density}
             badges={
               <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={flowCopy.badgeVariant} className="h-6 px-2">
+                  {flowCopy.badgeLabel}
+                </Badge>
                 <Badge
                   variant={
                     readinessTone === "success"
@@ -601,15 +673,18 @@ export function TodayClient(props: {
                 >
                   Readiness {typeof readiness === "number" ? `${readiness}%` : "—"}
                 </Badge>
-                {props.checkInRequired ? (
-                  <Badge variant="warning" className="h-6 px-2">
-                    Check-in required
-                  </Badge>
-                ) : null}
               </div>
             }
           >
             <div className={cn("grid gap-2", density === "compact" ? "mt-2" : "mt-3")}>
+              <div className="text-sm text-foreground/90">{flowCopy.summary}</div>
+              <TodayDecisionInlineStatus
+                stale={todayDecisionData?.stale}
+                staleReason={todayDecisionData?.staleReason}
+                changedAt={todayDecisionData?.changedAt}
+                generatedAt={todayDecisionData?.decision.generatedAt}
+                cached={todayDecisionData?.cached}
+              />
               <div className="text-xs text-muted-foreground">{todayMeta.recoveryTimeText}</div>
               <div className="text-xs text-muted-foreground tabular-nums">{todayMeta.signalSnapshot}</div>
 
@@ -655,11 +730,21 @@ export function TodayClient(props: {
               >
                 What should I do today?
               </Button>
+              {todayDecisionData?.stale ? (
+                <div className="flex justify-start">
+                  <Badge variant="warning" className="h-5 px-2 text-2xs">
+                    {getTodayDecisionStaleBadgeCopy(todayDecisionData.staleReason)}
+                  </Badge>
+                </div>
+              ) : null}
             </div>
           </ActionCard>
           <TodayDecisionSheet
             open={todayDecisionOpen}
             onOpenChange={setTodayDecisionOpen}
+            refreshKey={plannerRefreshKey}
+            initialData={todayDecisionData}
+            onDataChange={setTodayDecisionData}
           />
         </div>
 
@@ -797,9 +882,28 @@ export function TodayClient(props: {
                       <WorkoutCompleteFlow
                         workoutId={w.id}
                         workoutTitle={w.title}
-                        onComplete={() => router.refresh()}
+                        onWorkoutCompleted={() => {
+                          refreshPlanner();
+                          router.refresh();
+                        }}
+                        onComplete={() => {
+                          refreshPlanner();
+                          router.refresh();
+                        }}
                       />
                     </div>
+                  ) : props.feedbackRequiredWorkout?.id === w.id ? (
+                    <Button
+                      size="sm"
+                      className={cn("h-8 gap-1.5 shrink-0", density === "compact" ? "px-2" : "px-2 sm:px-3")}
+                      onClick={() => {
+                        setFeedbackWorkout({ id: w.id, title: w.title });
+                        setFeedbackOpen(true);
+                      }}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className={cn(density === "compact" ? "hidden sm:inline" : "inline")}>Add feedback</span>
+                    </Button>
                   ) : (
                     <Button variant="outline" size="sm" disabled className={cn("h-8 gap-1.5 shrink-0", density === "compact" ? "px-2" : "px-2 sm:px-3")}>
                       <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
@@ -889,6 +993,21 @@ export function TodayClient(props: {
           workout={modalWorkout}
           onComplete={() => {
             setCheckInOpen(false);
+            refreshPlanner();
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {feedbackWorkout ? (
+        <WorkoutFeedbackModal
+          open={feedbackOpen}
+          onOpenChange={setFeedbackOpen}
+          workoutId={feedbackWorkout.id}
+          workoutTitle={feedbackWorkout.title}
+          onComplete={() => {
+            setFeedbackOpen(false);
+            refreshPlanner();
             router.refresh();
           }}
         />

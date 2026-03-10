@@ -363,7 +363,7 @@ export async function aggregateAndStoreMemory(
  */
 export async function updateCoachInsightsFromFeedback(userId: string): Promise<void> {
   const feedback = await db.postWorkoutFeedback.findMany({
-    where: { userId, visibleToAI: true },
+    where: { userId, visibleToAI: true, visibleToFuturePlanning: true },
     orderBy: { createdAt: "desc" },
     take: 30,
     select: {

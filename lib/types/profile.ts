@@ -47,4 +47,10 @@ export const BIRTH_YEAR_MAX = 2015;
 export const RAMP_RATE_MIN = 5;
 export const RAMP_RATE_MAX = 30;
 export const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
-export const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// Allow modern formats. HEIC/HEIF (common on iPhone) is converted client-side before upload.
+export const AVATAR_ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+];

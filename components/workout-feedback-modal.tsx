@@ -97,11 +97,34 @@ export function WorkoutFeedbackModal({
   const [sessionTerrain, setSessionTerrain] = useState<string>("");
   const [sessionAvailability, setSessionAvailability] = useState<string>("");
 
+  function resetForm() {
+    setExistingFeedback(null);
+    setPerceivedDifficulty("OK");
+    setVsPlanned("SAME");
+    setEnjoyment(3);
+    setDiscomfort("NONE");
+    setMentalState(3);
+    setComment("");
+    setVisibleToAI(true);
+    setActualAvgHR("");
+    setActualMaxHR("");
+    setActualPaceText("");
+    setActualRpe("");
+    setActualFeel(3);
+    setSessionEquipment("");
+    setSessionTerrain("");
+    setSessionAvailability("");
+  }
+
   // Load existing feedback
   useEffect(() => {
-    if (open && workoutId) {
-      setIsLoading(true);
-      getFeedbackForWorkout(workoutId).then((feedback) => {
+    if (!open || !workoutId) return;
+    let cancelled = false;
+    setIsLoading(true);
+    resetForm();
+    getFeedbackForWorkout(workoutId)
+      .then((feedback) => {
+        if (cancelled) return;
         if (feedback) {
           setExistingFeedback(feedback);
           setPerceivedDifficulty(feedback.perceivedDifficulty as PerceivedDifficulty);
@@ -120,10 +143,21 @@ export function WorkoutFeedbackModal({
           setSessionTerrain(feedback.sessionTerrain || "");
           setSessionAvailability(feedback.sessionAvailability || "");
         }
-        setIsLoading(false);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
       });
-    }
+    return () => {
+      cancelled = true;
+    };
   }, [open, workoutId]);
+
+  useEffect(() => {
+    if (open) return;
+    resetForm();
+    setIsLoading(true);
+    setIsSubmitting(false);
+  }, [open]);
 
   const isReadOnly = existingFeedback ? !existingFeedback.isEditable : false;
 
@@ -198,28 +232,32 @@ export function WorkoutFeedbackModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-primary" />
-            Post-Workout Feedback
-          </DialogTitle>
-          <DialogDescription>
-            {workoutTitle}
-            {isReadOnly && (
-              <Badge variant="secondary" className="ml-2">
-                <Lock className="h-3 w-3 mr-1" />
-                Read-only
-              </Badge>
-            )}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-xl p-0 gap-0 overflow-hidden max-h-[100dvh]">
+        <div className="flex max-h-[100dvh] flex-col">
+          <div className="shrink-0 border-b border-border/50 p-6 safe-area-top">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Post-Workout Feedback
+              </DialogTitle>
+              <DialogDescription>
+                {workoutTitle}
+                {isReadOnly && (
+                  <Badge variant="secondary" className="ml-2">
+                    <Lock className="h-3 w-3 mr-1" />
+                    Read-only
+                  </Badge>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
-        {isLoading ? (
+          {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
+          <div className="flex-1 overflow-y-auto p-6 safe-area-inset-bottom">
           <div className="space-y-6 py-2">
             {isReadOnly && (
               <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
@@ -465,23 +503,25 @@ export function WorkoutFeedbackModal({
               </button>
             </div>
 
-            {/* Submit Button */}
+          </div>
+          </div>
+        )}
+          <div className="shrink-0 border-t border-border/50 p-4 flex items-center justify-end gap-3 safe-area-inset-bottom">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+              Close
+            </Button>
             {!isReadOnly && (
-              <Button
-                className="w-full"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-              >
+              <Button onClick={handleSubmit} disabled={isSubmitting}>
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Check className="h-4 w-4 mr-2" />
                 )}
-                {existingFeedback ? "Update Feedback" : "Save Feedback"}
+                {existingFeedback ? "Update feedback" : "Save feedback"}
               </Button>
             )}
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );

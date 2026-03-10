@@ -1,13 +1,33 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar, Zap, TrendingUp, Battery, Clock, Pin, ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PendingCoachChangesBanner } from "@/components/coach/pending-coach-changes-banner";
+import Link from "next/link";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
+import { getPlanAdaptationReviewHref } from "@/lib/product/plan-adaptation-ui";
+import {
+  getCoachSuggestionCalendarHref,
+  summarizeCoachPendingChanges,
+} from "@/lib/product/coach-pending-changes";
+import {
+  getCoachReviewInCalendarLabel,
+  getCoachReviewTargetBadgeLabel,
+} from "@/lib/product/coach-review-copy";
+import {
+  getCoachReviewApplyToast,
+  getCoachReviewDismissToast,
+} from "@/lib/product/coach-review-outcome";
+import {
+  buildResolvedDashboardCoachReviewUrl,
+  clearCoachReviewContextUrl,
+} from "@/lib/product/coach-review-context";
+import { cn, formatLocalDateInput } from "@/lib/utils";
 
 interface TodayWorkout {
   id: string;
@@ -62,17 +82,31 @@ function hasAppliedEffect(suggestions: ApiCoachSuggestion[], type: string, scope
 }
 
 export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: CoachCommandCenterProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [suggestions, setSuggestions] = useState<ApiCoachSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const focusedSuggestionRef = useRef<HTMLDivElement | null>(null);
 
   const todayWorkout = pageData?.todayWorkout ?? null;
   const readiness = context?.readiness ?? 0;
   const atl = pageData?.atl ?? context?.currentAtl ?? 0;
+  const reviewSuggestionId = searchParams?.get("suggestionId") ?? null;
+  const resolvedSuggestionId = searchParams?.get("resolvedSuggestionId") ?? null;
+  const requestedContextDate = useMemo(() => {
+    const value = searchParams?.get("contextDate") ?? searchParams?.get("resolvedContextDate");
+    return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : formatLocalDateInput(new Date());
+  }, [searchParams]);
 
   const pendingSuggestions = suggestions.filter((s) => s.status === "PENDING");
   const appliedSuggestions = suggestions.filter((s) => s.status === "APPLIED");
+  const resolvedSuggestion =
+    resolvedSuggestionId
+      ? suggestions.find((suggestion) => suggestion.id === resolvedSuggestionId && suggestion.status !== "PENDING") ?? null
+      : null;
+  const pendingSummary = summarizeCoachPendingChanges(pendingSuggestions);
 
   const appliedAdjustToday = hasAppliedEffect(appliedSuggestions, "ADJUST_INTENSITY", "today");
   const appliedSwapSession = hasAppliedEffect(appliedSuggestions, "SWAP_SESSION");
@@ -81,8 +115,7 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`/api/ai/coach-suggestions?date=${today}&includeApplied=true`);
+      const res = await fetch(`/api/ai/coach-suggestions?date=${requestedContextDate}&includeApplied=true`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = (await res.json()) as { suggestions: ApiCoachSuggestion[] };
       setSuggestions(data.suggestions ?? []);
@@ -92,11 +125,38 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedContextDate]);
 
   useEffect(() => {
     fetchSuggestions();
   }, [fetchSuggestions]);
+
+  useEffect(() => {
+    if (!reviewSuggestionId || loading || !focusedSuggestionRef.current) return;
+    focusedSuggestionRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [reviewSuggestionId, loading, suggestions]);
+
+  const clearReviewTarget = useCallback(() => {
+    if (typeof window === "undefined" || !reviewSuggestionId) return;
+    router.replace(clearCoachReviewContextUrl(window.location.href));
+  }, [reviewSuggestionId, router]);
+
+  const clearResolvedReview = useCallback(() => {
+    if (typeof window === "undefined" || !resolvedSuggestionId) return;
+    router.replace(clearCoachReviewContextUrl(window.location.href));
+  }, [resolvedSuggestionId, router]);
+
+  useEffect(() => {
+    if (!reviewSuggestionId || loading) return;
+    if (pendingSuggestions.some((suggestion) => suggestion.id === reviewSuggestionId)) return;
+    clearReviewTarget();
+  }, [clearReviewTarget, loading, pendingSuggestions, reviewSuggestionId]);
+
+  useEffect(() => {
+    if (!resolvedSuggestionId || loading) return;
+    if (resolvedSuggestion) return;
+    clearResolvedReview();
+  }, [clearResolvedReview, loading, resolvedSuggestion, resolvedSuggestionId]);
 
   const handleGenerate = useCallback(async () => {
     if (generating) return;
@@ -105,7 +165,7 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
       const res = await fetch("/api/ai/coach-suggestions/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: false }),
+        body: JSON.stringify({ contextDate: requestedContextDate, force: false }),
       });
       const data = (await res.json()) as { ok?: boolean; count?: number; error?: string };
       if (!res.ok || !data.ok) {
@@ -119,7 +179,7 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
     } finally {
       setGenerating(false);
     }
-  }, [generating, fetchSuggestions]);
+  }, [generating, fetchSuggestions, requestedContextDate]);
 
   const handleApply = useCallback(
     async (s: ApiCoachSuggestion) => {
@@ -127,23 +187,29 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
       setApplyingId(s.id);
       try {
         const res = await fetch(`/api/ai/coach-suggestions/${s.id}/apply`, { method: "POST" });
-        const data = (await res.json()) as { ok?: boolean; error?: string; proposalCreated?: boolean };
+        const data = (await res.json()) as { ok?: boolean; error?: string; proposalCreated?: boolean; proposalId?: string };
         if (!res.ok || !data.ok) {
           toast.error(data.error ?? "Failed to apply");
           return;
         }
-        toast.success(data.proposalCreated ? "Proposal created" : "Suggestion applied");
+        toast.success(getCoachReviewApplyToast({ proposalCreated: data.proposalCreated }));
         setSuggestions((prev) =>
           prev.map((x) => (x.id === s.id ? { ...x, status: "APPLIED" as const, appliedAt: new Date().toISOString() } : x))
         );
+        if (reviewSuggestionId === s.id) {
+          clearReviewTarget();
+        }
         onRefresh?.();
+        if (data.proposalCreated && data.proposalId) {
+          router.push(getPlanAdaptationReviewHref({ proposalId: data.proposalId }));
+        }
       } catch (_e) {
         toast.error("Failed to apply");
       } finally {
         setApplyingId(null);
       }
     },
-    [applyingId, onRefresh]
+    [applyingId, clearReviewTarget, onRefresh, reviewSuggestionId, router]
   );
 
   const handleDismiss = useCallback(
@@ -158,14 +224,17 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
           return;
         }
         setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
-        toast("Suggestion dismissed");
+        if (reviewSuggestionId === s.id) {
+          clearReviewTarget();
+        }
+        toast.success(getCoachReviewDismissToast());
       } catch (_e) {
         toast.error("Failed to dismiss");
       } finally {
         setApplyingId(null);
       }
     },
-    [applyingId]
+    [applyingId, clearReviewTarget, reviewSuggestionId]
   );
 
   return (
@@ -363,19 +432,88 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
             </>
           ) : (
             <>
+              {pendingSummary ? (
+                <PendingCoachChangesBanner
+                  summary={pendingSummary}
+                  compact
+                  href={null}
+                  showCalendarLink
+                  className="mb-1"
+                />
+              ) : null}
+              {resolvedSuggestion ? (
+                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-xs font-medium text-foreground">Coach review completed</p>
+                    <Badge variant="outline" className="text-[9px] h-4 px-1">
+                      {resolvedSuggestion.scope}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-foreground/90">{resolvedSuggestion.title}</p>
+                  <p className="text-[11px] text-muted-foreground">{resolvedSuggestion.summary}</p>
+                  <div className="flex gap-1 pt-1">
+                    {getCoachSuggestionCalendarHref(resolvedSuggestion.payload, resolvedSuggestion.contextDate, {
+                      suggestionId: resolvedSuggestion.id,
+                      contextDate: resolvedSuggestion.contextDate,
+                    }) ? (
+                      <Button asChild size="sm" variant="outline" className="h-5 text-[11px] px-2">
+                        <Link
+                          href={
+                            getCoachSuggestionCalendarHref(
+                              resolvedSuggestion.payload,
+                              resolvedSuggestion.contextDate,
+                              {
+                                suggestionId: resolvedSuggestion.id,
+                                contextDate: resolvedSuggestion.contextDate,
+                              }
+                            ) ?? "/calendar"
+                          }
+                        >
+                          {getCoachReviewInCalendarLabel()}
+                        </Link>
+                      </Button>
+                    ) : null}
+                    <Button asChild size="sm" variant="outline" className="h-5 text-[11px] px-2">
+                      <Link
+                        href={buildResolvedDashboardCoachReviewUrl({
+                          suggestionId: resolvedSuggestion.id,
+                          contextDate: resolvedSuggestion.contextDate,
+                        })}
+                      >
+                        Back to Dashboard
+                      </Link>
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-5 text-[11px] px-2" onClick={clearResolvedReview}>
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {pendingSuggestions.map((s) => {
                 const isApplied = s.status === "APPLIED";
                 const isApplying = applyingId === s.id;
+                const isReviewTarget = reviewSuggestionId === s.id;
+                const calendarHref = getCoachSuggestionCalendarHref(s.payload, s.contextDate, {
+                  suggestionId: s.id,
+                  contextDate: s.contextDate,
+                });
                 return (
                   <div
                     key={s.id}
-                    className="rounded-md border border-border/50 bg-muted/10 p-2.5 space-y-1.5"
+                    ref={isReviewTarget ? focusedSuggestionRef : null}
+                    className={cn(
+                      "rounded-md border border-border/50 bg-muted/10 p-2.5 space-y-1.5",
+                      isReviewTarget && "border-primary/40 bg-primary/5 shadow-sm"
+                    )}
                   >
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="font-medium text-xs">{s.title}</p>
                       <Badge variant="outline" className="text-[9px] h-4 px-1">
                         {s.scope}
                       </Badge>
+                      {isReviewTarget ? (
+                        <Badge className="h-4 px-1 text-[9px]">{getCoachReviewTargetBadgeLabel()}</Badge>
+                      ) : null}
                     </div>
                     <p className="text-[11px] text-muted-foreground">{s.summary}</p>
                     <Collapsible className="group">
@@ -392,6 +530,11 @@ export function CoachCommandCenter({ pageData, context, onCommand, onRefresh }: 
                       </CollapsibleContent>
                     </Collapsible>
                     <div className="flex gap-1 pt-1">
+                      {calendarHref ? (
+                        <Button asChild size="sm" variant="outline" className="h-5 text-[11px] px-2">
+                          <Link href={calendarHref}>{getCoachReviewInCalendarLabel()}</Link>
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant={isApplied ? "secondary" : "default"}

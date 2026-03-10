@@ -14,10 +14,10 @@ const root = join(__dirname, "..");
 const brandDir = join(root, "public", "brand");
 const outDir = join(root, "public", "icons");
 const THEME = "#0B0B0F";
-const STROKE_A = 6;
-const STROKE_EKG = 5;
-const PATH_A = "M12 56 L32 12 L52 56";
-const PATH_EKG = "M19.27 40 L29 40 L32 33 L35 40 L44.73 40";
+const STROKE_A = 5.5;
+const STROKE_EKG = 4.5;
+const PATH_A = "M16 54 L32 12 L48 54";
+const PATH_EKG = "M22 40 H27.5 L31.5 33.5 L35 42 H42";
 
 function svgIcon(size, contentScale = 0.88) {
   const pad = (size * (1 - contentScale)) / 2;

@@ -1,7 +1,10 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { getAdaptiveDayPlannerCacheSnapshot } from "@/lib/services/adaptive-day-planner-cache.service";
 import { getDashboardMetrics, getUpcomingWorkouts, getRecentWorkouts } from "@/lib/services/metrics";
+import { getCoachPendingChangesSummary } from "@/lib/services/coach-pending-changes.service";
+import { getResolvedCoachReviewSummary } from "@/lib/services/resolved-coach-review.service";
 import { getTodayReadiness, getRiskAssessment, getReadinessTrend } from "@/lib/actions/decision";
 import { getPsychologyData } from "@/lib/actions/psychology";
 import { needsCheckIn, getTodayCheckIn, getTodayPremiumCheckin } from "@/lib/actions/daily-checkin";
@@ -9,11 +12,16 @@ import { getDashboardRetentionSummary } from "@/lib/actions/dashboard-retention"
 import { getTodayQuote } from "@/lib/actions/quotes";
 import { DashboardClientV2 } from "./dashboard-client-v2";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ resolvedSuggestionId?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login");
   }
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   const safe = async <T,>(label: string, p: Promise<T>, fallback: T): Promise<T> => {
     try {
@@ -39,6 +47,9 @@ export default async function DashboardPage() {
     latestDigest,
     retentionSummary,
     quoteResult,
+    todayDecision,
+    coachPendingChanges,
+    resolvedCoachReview,
   ] = await Promise.all([
     safe(
       "getDashboardMetrics",
@@ -102,6 +113,23 @@ export default async function DashboardPage() {
       },
     }),
     safe("getTodayQuote", getTodayQuote(), null),
+    safe(
+      "getAdaptiveDayPlannerCacheSnapshot",
+      getAdaptiveDayPlannerCacheSnapshot(session.user.id, new Date(new Date().setHours(0, 0, 0, 0))),
+      { payload: null, stale: false, staleReason: null, changedAt: null }
+    ),
+    safe(
+      "getCoachPendingChangesSummary",
+      getCoachPendingChangesSummary(session.user.id, new Date(new Date().setHours(0, 0, 0, 0))),
+      null
+    ),
+    safe(
+      "getResolvedCoachReviewSummary",
+      typeof resolvedSearchParams?.resolvedSuggestionId === "string" && resolvedSearchParams.resolvedSuggestionId.length > 0
+        ? getResolvedCoachReviewSummary(session.user.id, resolvedSearchParams.resolvedSuggestionId)
+        : Promise.resolve(null),
+      null
+    ),
   ]);
 
   return (
@@ -123,6 +151,20 @@ export default async function DashboardPage() {
         userAccepted: todayCheckIn.userAccepted,
       } : null}
       premiumCheckin={todayPremiumCheckin}
+      initialTodayDecision={
+        todayDecision.payload
+          ? {
+              decision: todayDecision.payload,
+              cached: true,
+              stale: todayDecision.stale,
+              staleReason: todayDecision.staleReason,
+              changedAt: todayDecision.changedAt,
+              date: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
+            }
+          : null
+      }
+      coachPendingChanges={coachPendingChanges}
+      resolvedCoachReview={resolvedCoachReview}
       retentionSummary={retentionSummary}
       latestDigest={
         latestDigest

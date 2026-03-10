@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { del, put } from "@vercel/blob";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
+import sharp from "sharp";
 import {
   AVATAR_MAX_SIZE_BYTES,
   AVATAR_ALLOWED_TYPES,
@@ -22,8 +23,8 @@ function isManagedBlobUrl(url: string): boolean {
   }
 }
 
-function sanitizeFilename(userId: string, mimeType: string): string {
-  const ext = mimeType === "image/jpeg" ? "jpg" : mimeType === "image/png" ? "png" : "webp";
+function sanitizeFilename(userId: string): string {
+  const ext = "webp"; // Always store as webp (we convert server-side)
   const safe = userId.replace(/[^a-zA-Z0-9-_]/g, "_");
   // Unique per upload to avoid aggressive browser/CDN caching for public assets.
   const stamp = Date.now().toString(36);
@@ -64,10 +65,15 @@ export async function POST(req: Request) {
       select: { image: true },
     });
 
-    const filename = sanitizeFilename(session.user.id, file.type);
+    const filename = sanitizeFilename(session.user.id);
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    const processed = await sharp(buffer, { failOnError: false })
+      .rotate()
+      .resize(512, 512, { fit: "cover" })
+      .webp({ quality: 82 })
+      .toBuffer();
 
     const token = process.env.BLOB_READ_WRITE_TOKEN;
     let avatarUrl: string;
@@ -83,9 +89,9 @@ export async function POST(req: Request) {
       }
 
       const blobPath = `${BLOB_PREFIX}/${session.user.id}/${filename}`;
-      const blob = await put(blobPath, buffer, {
+      const blob = await put(blobPath, processed, {
         access: "public",
-        contentType: file.type,
+        contentType: "image/webp",
         token,
       });
       avatarUrl = blob.url;
@@ -105,7 +111,7 @@ export async function POST(req: Request) {
       const dir = path.join(process.cwd(), UPLOAD_DIR);
       await mkdir(dir, { recursive: true });
       const filepath = path.join(dir, filename);
-      await writeFile(filepath, buffer);
+      await writeFile(filepath, processed);
 
       avatarUrl = `/uploads/avatars/${filename}`;
     }

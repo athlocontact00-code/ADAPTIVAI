@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  adaptiveDayPlannerPayloadSchema,
+  getAdaptiveDayPlannerCacheSnapshot,
+  persistAdaptiveDayPlannerCache,
+} from "@/lib/services/adaptive-day-planner-cache.service";
 import { buildAIContextForUser } from "@/lib/services/ai-context.builder";
+import {
+  buildAdaptiveDayPlannerFromContext,
+  type AdaptiveDayPlannerPayload,
+} from "@/lib/services/adaptive-day-planner.service";
 import { startOfDay } from "@/lib/utils";
 import { z } from "zod";
 
@@ -10,101 +19,21 @@ const InputSchema = z.object({
   force: z.boolean().optional(),
 });
 
-const DecisionSchema = z.object({
-  decision: z.enum(["DO_THIS_WORKOUT", "LIGHT_ALTERNATIVE", "REST_TODAY"]),
-  action: z.object({
-    title: z.string(),
-    details: z.string(),
-    targets: z
-      .object({
-        discipline: z.enum(["run", "bike", "swim", "strength"]).optional(),
-        paceRange: z.string().optional(),
-        powerRange: z.string().optional(),
-        hrRange: z.string().optional(),
-        durationMin: z.number().optional(),
-      })
-      .optional(),
-    link: z
-      .object({
-        type: z.enum(["workout", "calendar_day", "coach_chat"]),
-        id: z.string().optional(),
-        date: z.string().optional(),
-      })
-      .optional(),
-  }),
-  why: z.string(),
-  confidence: z.enum(["LOW", "MED", "HIGH"]),
-});
+const DecisionSchema = adaptiveDayPlannerPayloadSchema;
 
-async function callTodayDecisionLLM(contextJson: string): Promise<z.infer<typeof DecisionSchema>> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key || key.length < 10) {
-    throw new Error("OpenAI not configured");
-  }
-
-  const system = `You are an expert endurance coach. Given the athlete's context, decide what they should do TODAY.
-
-Always output EXACTLY one of these decisions:
-- DO_THIS_WORKOUT: Proceed with the planned workout (or a concrete suggestion if none)
-- LIGHT_ALTERNATIVE: Suggest an easier/modified session
-- REST_TODAY: Recommend rest or very light movement only
-
-Output STRICT JSON only, no markdown. Schema:
-{
-  "decision": "DO_THIS_WORKOUT" | "LIGHT_ALTERNATIVE" | "REST_TODAY",
-  "action": {
-    "title": "Short action title",
-    "details": "1-2 sentences of what to do",
-    "targets": { "discipline": "run"|"bike"|"swim"|"strength", "paceRange": "...", "durationMin": number } (optional),
-    "link": { "type": "workout"|"calendar_day"|"coach_chat", "id": "...", "date": "YYYY-MM-DD" } (optional)
-  },
-  "why": "Max 2 sentences",
-  "confidence": "LOW"|"MED"|"HIGH"
-}`;
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: `Athlete context:\n${contextJson}` },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 400,
-      temperature: 0.3,
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`OpenAI error: ${response.status} ${text}`);
-  }
-
-  const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content || typeof content !== "string") {
-    throw new Error("Empty AI response");
-  }
-
-  const parsed = JSON.parse(content) as unknown;
-  return DecisionSchema.parse(parsed);
-}
-
-function fallbackDecision(): z.infer<typeof DecisionSchema> {
+function fallbackDecision(): AdaptiveDayPlannerPayload {
   return {
-    decision: "REST_TODAY",
+    decision: "PLAN_NEXT",
+    state: "NO_PLAN",
     action: {
-      title: "Set up your plan",
-      details: "Create a 7-day plan in the AI Coach or Calendar to get personalized daily recommendations.",
+      title: "Plan the next sessions",
+      details: "Create a 7-day plan in the AI Coach or Calendar to unlock adaptive daily decisions.",
       link: { type: "coach_chat" },
     },
-    why: "No training plan or check-in data yet.",
+    why: "The planner needs a visible short-horizon plan before it can adapt the day.",
     confidence: "LOW",
+    reasons: ["No short-horizon plan available yet"],
+    patchPreview: null,
   };
 }
 
@@ -126,60 +55,95 @@ export async function POST(req: Request) {
   const decisionDate = dateStr ? startOfDay(new Date(dateStr)) : startOfDay(new Date());
 
   if (!force) {
-    const cached = await db.todayDecision.findUnique({
-      where: {
-        userId_date: { userId: session.user.id, date: decisionDate },
-      },
-    });
-    if (cached) {
-      const payload = JSON.parse(cached.payload) as z.infer<typeof DecisionSchema>;
+    const cached = await getAdaptiveDayPlannerCacheSnapshot(session.user.id, decisionDate);
+    if (cached.payload) {
       return NextResponse.json({
-        decision: payload,
+        decision: DecisionSchema.parse(cached.payload),
         cached: true,
+        stale: cached.stale,
+        staleReason: cached.staleReason,
+        changedAt: cached.changedAt,
         date: decisionDate.toISOString(),
       });
     }
   }
 
-  let decision: z.infer<typeof DecisionSchema>;
+  let decision: AdaptiveDayPlannerPayload;
 
   try {
     const context = await buildAIContextForUser(session.user.id);
-    const contextStr = JSON.stringify(
-      {
-        planSummary: context.planSummary,
-        todayCheckin: context.todayCheckin,
-        recentSignals: {
-          checkIns7d: context.recentSignals.checkIns7d,
-          metrics14d: context.recentSignals.metrics14d,
+    const horizonEnd = new Date(decisionDate);
+    horizonEnd.setDate(horizonEnd.getDate() + 3);
+    const tomorrow = new Date(decisionDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [horizonWorkouts, feedbackRequiredWorkout] = await Promise.all([
+      db.workout.findMany({
+        where: {
+          userId: session.user.id,
+          date: { gte: decisionDate, lt: horizonEnd },
         },
-        recentTraining: context.recentTraining,
-        goals: context.goals,
-      },
-      null,
-      2
-    );
-    decision = await callTodayDecisionLLM(contextStr);
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          date: true,
+          planned: true,
+          completed: true,
+          durationMin: true,
+          tss: true,
+        },
+      }),
+      db.workout.findFirst({
+        where: {
+          userId: session.user.id,
+          completed: true,
+          date: { gte: decisionDate, lt: tomorrow },
+          feedback: null,
+        },
+        orderBy: { date: "desc" },
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          date: true,
+        },
+      }),
+    ]);
+
+    const workoutsMapped = horizonWorkouts.map((workout) => ({
+      ...workout,
+      date: workout.date.toISOString().slice(0, 10),
+    }));
+
+    decision = buildAdaptiveDayPlannerFromContext({
+      context,
+      decisionDate: decisionDate.toISOString().slice(0, 10),
+      todayWorkouts: workoutsMapped.filter((workout) => workout.date === decisionDate.toISOString().slice(0, 10)),
+      horizonWorkouts: workoutsMapped,
+      feedbackRequiredWorkout: feedbackRequiredWorkout
+        ? {
+            id: feedbackRequiredWorkout.id,
+            title: feedbackRequiredWorkout.title,
+            type: feedbackRequiredWorkout.type,
+            date: feedbackRequiredWorkout.date.toISOString().slice(0, 10),
+          }
+        : null,
+    });
   } catch (err) {
-    console.error("[today-decision] LLM failed:", err);
+    console.error("[today-decision] planner failed:", err);
     decision = fallbackDecision();
   }
 
-  await db.todayDecision.upsert({
-    where: {
-      userId_date: { userId: session.user.id, date: decisionDate },
-    },
-    create: {
-      userId: session.user.id,
-      date: decisionDate,
-      payload: JSON.stringify(decision),
-    },
-    update: { payload: JSON.stringify(decision) },
-  });
+  decision = await persistAdaptiveDayPlannerCache(session.user.id, decisionDate, decision);
 
   return NextResponse.json({
     decision,
     cached: false,
+    stale: false,
+    staleReason: null,
+    changedAt: null,
     date: decisionDate.toISOString(),
   });
 }

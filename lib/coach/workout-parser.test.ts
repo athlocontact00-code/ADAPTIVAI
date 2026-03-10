@@ -69,6 +69,36 @@ Add to calendar when ready.`;
     expect((parsed as ParsedWorkout).date).toBeDefined();
   });
 
+  it("prefers the last valid CALENDAR BLOCK when the message contains an example first", () => {
+    const text = `Example format:
+---
+Title: Example Run
+Sport: RUN
+Total: 30 min
+Main set:
+- 20 min easy
+---
+
+Your actual session:
+---
+Title: Threshold Swim
+Sport: SWIM
+Total: 70 min
+Warm-up:
+- 400m easy
+Main set:
+- 10x100m threshold, 20s rest
+Cool-down:
+- 200m easy
+---`;
+    const parsed = parseWorkoutFromText(text);
+    expect(parsed).not.toBeNull();
+    expect((parsed as ParsedWorkout).title).toBe("Threshold Swim");
+    expect((parsed as ParsedWorkout).sport).toBe("SWIM");
+    expect((parsed as ParsedWorkout).totalMinutes).toBe(70);
+    expect((parsed as ParsedWorkout).descriptionMarkdown).toContain("10x100m threshold");
+  });
+
   it("parses labeled format (TITLE / SPORT / TOTAL TIME / MAIN SET)", () => {
     const text = `TITLE: Tempo Run
 SPORT: RUN
@@ -100,6 +130,30 @@ Goal: Upper push.`;
     expect((parsed as ParsedWorkout).sport).toBe("STRENGTH");
     expect((parsed as ParsedWorkout).totalMinutes).toBe(60);
     expect((parsed as ParsedWorkout).title).toContain("PUSH");
+  });
+
+  it("parses strength labeled format with explicit Core section", () => {
+    const text = `TITLE: Strength Mobility
+SPORT: STRENGTH
+TOTAL TIME: 40 min
+
+WARM-UP:
+5 min bike + shoulder prep
+
+MAIN SET:
+3x10 split squat, 60s rest
+
+CORE:
+dead bug 3x8/side
+pallof hold 3x20s/side
+
+COOL-DOWN:
+light mobility`;
+    const parsed = parseWorkoutFromText(text);
+    expect(parsed).not.toBeNull();
+    expect((parsed as ParsedWorkout).sport).toBe("STRENGTH");
+    expect((parsed as ParsedWorkout).title).toBe("Strength Mobility");
+    expect((parsed as ParsedWorkout).descriptionMarkdown).toMatch(/CORE:/i);
   });
 
   it("parses heuristic format (sport keyword + numeric markers)", () => {

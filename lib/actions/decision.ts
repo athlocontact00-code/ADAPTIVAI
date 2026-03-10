@@ -25,6 +25,7 @@ import {
   GuardrailResult
 } from "@/lib/services/guardrails.service";
 import { addDays, formatLocalDateInput, parseDateToLocalNoon, startOfWeek } from "@/lib/utils";
+import { invalidateAdaptiveDayPlannerCacheForDateRange } from "@/lib/services/adaptive-day-planner-cache.service";
 
 export interface ReadinessData {
   score: number;
@@ -440,6 +441,8 @@ export async function applyDeloadWeek(
         } as any,
       });
     }
+
+    await invalidateAdaptiveDayPlannerCacheForDateRange(userId, startDate, endDate);
 
     // Log the deload action
     await (db as any).planGenerationLog.create({

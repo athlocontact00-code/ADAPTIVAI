@@ -9,12 +9,14 @@ import { WorkoutFeedbackModal } from "@/components/workout-feedback-modal";
 interface WorkoutCompleteFlowProps {
   workoutId: string;
   workoutTitle: string;
+  onWorkoutCompleted?: () => void;
   onComplete?: () => void;
 }
 
 export function WorkoutCompleteFlow({
   workoutId,
   workoutTitle,
+  onWorkoutCompleted,
   onComplete,
 }: WorkoutCompleteFlowProps) {
   const [isCompleting, setIsCompleting] = useState(false);
@@ -34,6 +36,7 @@ export function WorkoutCompleteFlow({
         throw new Error("Failed to complete workout");
       }
 
+      onWorkoutCompleted?.();
       setShowFeedback(true);
     } catch (_error) {
       toast.error("Failed to complete workout");

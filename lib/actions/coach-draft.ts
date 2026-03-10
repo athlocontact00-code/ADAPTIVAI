@@ -12,6 +12,7 @@ import { parseSwimMetersFromText } from "@/lib/utils/swim-meters";
 import { ensureExactTotalMeters } from "@/lib/coach/swim-utils";
 import { extractPayloadFromAssistantMessages } from "@/lib/coach/calendar-payload-from-messages";
 import { sanitizeCoachText, parseWorkoutFromText, parsedWorkoutToPayload } from "@/lib/coach/workout-parser";
+import { invalidateAdaptiveDayPlannerCacheForDateRange } from "@/lib/services/adaptive-day-planner-cache.service";
 
 const AI_DRAFT_SOURCE = "AI_DRAFT";
 const AI_FINAL_SOURCE = "AI";
@@ -189,6 +190,16 @@ export async function insertDraftWorkoutsFromCalendarJson(
     createdIds.push(created.id);
   }
 
+  if (payload.items.length > 0) {
+    const touchedDates = payload.items.map((item) => parseDateToLocalNoon(item.date));
+    touchedDates.sort((a, b) => a.getTime() - b.getTime());
+    await invalidateAdaptiveDayPlannerCacheForDateRange(
+      userId,
+      touchedDates[0],
+      touchedDates[touchedDates.length - 1]
+    );
+  }
+
   return { success: true, createdIds };
 }
 
@@ -268,6 +279,16 @@ export async function undoDraftWorkouts(workoutIds: string[]): Promise<{ success
   if (workoutIds.length === 0) return { success: true, deleted: 0 };
 
   const cutoff = new Date(Date.now() - UNDO_MAX_AGE_MS);
+  const workouts = await db.workout.findMany({
+    where: {
+      id: { in: workoutIds },
+      userId: session.user.id,
+      source: AI_DRAFT_SOURCE,
+      createdAt: { gte: cutoff },
+    },
+    select: { date: true },
+    orderBy: { date: "asc" },
+  });
   const deleted = await db.workout.deleteMany({
     where: {
       id: { in: workoutIds },
@@ -276,6 +297,14 @@ export async function undoDraftWorkouts(workoutIds: string[]): Promise<{ success
       createdAt: { gte: cutoff },
     },
   });
+
+  if (workouts.length > 0 && deleted.count > 0) {
+    await invalidateAdaptiveDayPlannerCacheForDateRange(
+      session.user.id,
+      workouts[0].date,
+      workouts[workouts.length - 1].date
+    );
+  }
 
   return { success: true, deleted: deleted.count };
 }

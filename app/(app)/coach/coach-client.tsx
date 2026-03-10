@@ -145,7 +145,7 @@ type StoredConversation = {
 export function CoachClient({ userId, context, recentLogs, psychologyData, pageData = null, canUseAICoach = true, trialEndsAt }: CoachClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prefill = searchParams.get("prefill");
+  const prefill = searchParams?.get("prefill") ?? null;
   const didInitConversationsForUserId = useRef<string | null>(null);
   const [isApplyingAction, setIsApplyingAction] = useState<string | null>(null);
   const [draft, setDraft] = useState<string>("");

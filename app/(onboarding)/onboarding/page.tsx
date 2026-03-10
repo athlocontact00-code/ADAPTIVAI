@@ -88,7 +88,7 @@ export default function OnboardingPage() {
       const result = await generateTrainingPlan();
       if (!result.success) {
         toast.error(result.error ?? "Failed to generate plan");
-        router.push("/today");
+        router.push("/dashboard?fromOnboarding=1");
         router.refresh();
         return;
       }
@@ -106,7 +106,7 @@ export default function OnboardingPage() {
       });
     } catch {
       toast.error("Something went wrong");
-      router.push("/today");
+      router.push("/dashboard?fromOnboarding=1");
       router.refresh();
     } finally {
       setIsLoading(false);
@@ -135,7 +135,7 @@ export default function OnboardingPage() {
         }),
       });
       if (!res.ok) throw new Error("Failed");
-      router.push("/today");
+      router.push("/dashboard?fromOnboarding=1");
       router.refresh();
     } catch {
       toast.error("Failed to save");
@@ -334,7 +334,7 @@ export default function OnboardingPage() {
         {step === 3 && !planResult && (
           <>
             <h1 className="text-xl font-semibold mb-1">{t("firstAction")}</h1>
-            <p className="text-sm text-muted-foreground mb-6">Get your first training plan</p>
+            <p className="text-sm text-muted-foreground mb-6">Generate your first week, then land on Dashboard with a clear next step.</p>
             <div className="space-y-3">
               <Button
                 className="w-full"
@@ -374,16 +374,26 @@ export default function OnboardingPage() {
               {planResult.workoutCount} {t("plannedSessions")} · {planResult.totalHours}h {t("totalHours")}
             </p>
             <div className="rounded-lg border bg-muted/30 p-4 mb-6">
-              <p className="text-sm">
+              <p className="text-sm font-medium">
                 {t("firstWorkout")}: {planResult.firstWorkoutTitle} {t("today")} / {t("tomorrow")}
               </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Next: review the plan on Dashboard, then open Today when you are ready to execute.
+              </p>
             </div>
-            <Link href="/today">
-              <Button className="w-full" size="lg">
-                {t("goToToday")}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            <div className="space-y-3">
+              <Link href="/dashboard?fromOnboarding=1">
+                <Button className="w-full" size="lg">
+                  Open Dashboard
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/today">
+                <Button variant="outline" className="w-full" size="lg">
+                  {t("goToToday")}
+                </Button>
+              </Link>
+            </div>
           </>
         )}
 
