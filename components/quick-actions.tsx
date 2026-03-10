@@ -7,6 +7,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { motion } from "framer-motion";
 
 interface QuickAction {
   icon: React.ReactNode;
@@ -67,7 +68,9 @@ export function QuickActions({
 
 function QuickActionButton({ action }: { action: QuickAction }) {
   return (
-    <button
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       onClick={action.onClick}
       className="flex min-h-[44px] items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/50 transition-all text-left w-full group"
     >
@@ -78,6 +81,6 @@ function QuickActionButton({ action }: { action: QuickAction }) {
         <p className="text-sm font-medium truncate">{action.label}</p>
         <p className="text-xs text-muted-foreground truncate">{action.description}</p>
       </div>
-    </button>
+    </motion.button>
   );
 }

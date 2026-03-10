@@ -60,6 +60,22 @@ import {
   getWeeklySummaryExport,
   type DashboardRetentionSummary,
 } from "@/lib/actions/dashboard-retention";
+import { motion, Variants } from "framer-motion";
+
+const staggerContainer: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const fadeInUp: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
+};
 
 interface ReadinessData {
   score: number;
@@ -309,18 +325,18 @@ export function DashboardClient({
   const readinessColor = !hasReadiness
     ? "text-muted-foreground"
     : readinessScore >= 70
-    ? "text-green-500"
-    : readinessScore >= 45
-    ? "text-yellow-500"
-    : "text-red-500";
+      ? "text-green-500"
+      : readinessScore >= 45
+        ? "text-yellow-500"
+        : "text-red-500";
 
   const readinessBgColor = !hasReadiness
     ? "bg-muted/20"
     : readinessScore >= 70
-    ? "bg-green-500/10"
-    : readinessScore >= 45
-    ? "bg-yellow-500/10"
-    : "bg-red-500/10";
+      ? "bg-green-500/10"
+      : readinessScore >= 45
+        ? "bg-yellow-500/10"
+        : "bg-red-500/10";
 
   const fatigueColor = {
     CNS: "text-red-500",
@@ -354,34 +370,41 @@ export function DashboardClient({
   }
 
   return (
-    <div className="page-container space-y-6">
+    <motion.div
+      className="page-container space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
       {/* Daily Check-in CTA */}
-      <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-transparent to-transparent">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <ClipboardCheck className="h-5 w-5 text-primary" />
+      <motion.div variants={fadeInUp}>
+        <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-transparent to-transparent">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <ClipboardCheck className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Daily Check-in</CardTitle>
+                <CardDescription>Get a pre-training recommendation for today</CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-base">Daily Check-in</CardTitle>
-              <CardDescription>Get a pre-training recommendation for today</CardDescription>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              if (!checkInWorkout) {
-                toast.error("No workout found", { description: "Plan a workout in Calendar first" });
-                return;
-              }
-              setShowCheckInModal(true);
-            }}
-          >
-            Open
-          </Button>
-        </CardHeader>
-      </Card>
+            <Button
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (!checkInWorkout) {
+                  toast.error("No workout found", { description: "Plan a workout in Calendar first" });
+                  return;
+                }
+                setShowCheckInModal(true);
+              }}
+            >
+              Open
+            </Button>
+          </CardHeader>
+        </Card>
+      </motion.div>
 
       {/* Mobile-safe: show adapted badge inline (avoid overlays) */}
       {todayCheckIn && todayCheckIn.aiDecision && todayCheckIn.aiDecision !== "PROCEED" && todayCheckIn.userAccepted && (
@@ -397,54 +420,56 @@ export function DashboardClient({
 
       {/* Next action + Retention */}
       {nextAction && (
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle className="text-base">Next action</CardTitle>
-              <CardDescription className="mt-1">
-                <span className="font-medium text-foreground">{nextAction.title}</span>
-                <span className="text-muted-foreground"> — {nextAction.subtitle}</span>
-              </CardDescription>
-            </div>
-            {nextActionButton?.href ? (
-              <Link href={nextActionButton.href}>
-                <Button size="sm" className="w-full sm:w-auto">{nextActionButton.label}</Button>
-              </Link>
-            ) : nextActionButton?.onClick ? (
-              <Button size="sm" onClick={nextActionButton.onClick} className="w-full sm:w-auto">
-                {nextActionButton.label}
-              </Button>
-            ) : null}
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex flex-col sm:flex-row sm:justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full sm:w-auto"
-                onClick={handleExportWeeklySummary}
-                disabled={exportingWeekly}
-              >
-                {exportingWeekly ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export weekly summary
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div variants={fadeInUp}>
+          <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Next action</CardTitle>
+                <CardDescription className="mt-1">
+                  <span className="font-medium text-foreground">{nextAction.title}</span>
+                  <span className="text-muted-foreground"> — {nextAction.subtitle}</span>
+                </CardDescription>
+              </div>
+              {nextActionButton?.href ? (
+                <Link href={nextActionButton.href}>
+                  <Button size="sm" className="w-full sm:w-auto">{nextActionButton.label}</Button>
+                </Link>
+              ) : nextActionButton?.onClick ? (
+                <Button size="sm" onClick={nextActionButton.onClick} className="w-full sm:w-auto">
+                  {nextActionButton.label}
+                </Button>
+              ) : null}
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex flex-col sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={handleExportWeeklySummary}
+                  disabled={exportingWeekly}
+                >
+                  {exportingWeekly ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export weekly summary
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
       {/* Streaks */}
       {streaks && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <motion.div variants={fadeInUp} className="grid gap-4 md:grid-cols-2">
           <KPICard
             title="Check-in streak"
             value={`${streaks.checkInDayStreak}d`}
@@ -461,7 +486,7 @@ export function DashboardClient({
             iconColor="text-primary"
             tooltip={`Counts consecutive weeks with at least ${streaks.workoutWeekThreshold} completed workouts.`}
           />
-        </div>
+        </motion.div>
       )}
 
       {/* Nudges */}
@@ -555,26 +580,28 @@ export function DashboardClient({
       )}
 
       {/* Quote of the Day */}
-      <Card className="bg-gradient-to-r from-primary/5 via-transparent to-transparent border-primary/10">
-        <CardContent className="py-5 px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <blockquote className="text-lg font-medium text-foreground/90 leading-relaxed">
-                &ldquo;{quote.text}&rdquo;
-              </blockquote>
-              <div className="mt-3 flex items-center gap-3">
-                <p className="text-sm text-muted-foreground">— {quote.author}</p>
-                <Badge 
-                  variant="outline" 
-                  className={`text-xs ${quote.categoryDisplay.color}`}
-                >
-                  {quote.categoryDisplay.label}
-                </Badge>
+      <motion.div variants={fadeInUp}>
+        <Card className="bg-gradient-to-r from-primary/5 via-transparent to-transparent border-primary/10">
+          <CardContent className="py-5 px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <blockquote className="text-lg font-medium text-foreground/90 leading-relaxed">
+                  &ldquo;{quote.text}&rdquo;
+                </blockquote>
+                <div className="mt-3 flex items-center gap-3">
+                  <p className="text-sm text-muted-foreground">— {quote.author}</p>
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${quote.categoryDisplay.color}`}
+                  >
+                    {quote.categoryDisplay.label}
+                  </Badge>
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Daily Insight */}
       {psychologyData?.insight && !insightDismissed && (
@@ -650,7 +677,7 @@ export function DashboardClient({
       </Dialog>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <motion.div variants={fadeInUp} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <TooltipProvider>
           <UITooltip>
             <TooltipTrigger asChild>
@@ -736,17 +763,16 @@ export function DashboardClient({
                 <Card className="cursor-pointer transition-colors hover:border-primary/50">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Consistency</CardTitle>
-                    <Target className={`h-4 w-4 ${
-                      psychologyData.compliance.status === "STRONG" ? "text-green-500" :
-                      psychologyData.compliance.status === "SLIPPING" ? "text-yellow-500" : "text-red-500"
-                    }`} />
+                    <Target className={`h-4 w-4 ${psychologyData.compliance.status === "STRONG" ? "text-green-500" :
+                        psychologyData.compliance.status === "SLIPPING" ? "text-yellow-500" : "text-red-500"
+                      }`} />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{psychologyData.compliance.completionRate}%</div>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant={
                         psychologyData.compliance.status === "STRONG" ? "success" :
-                        psychologyData.compliance.status === "SLIPPING" ? "warning" : "danger"
+                          psychologyData.compliance.status === "SLIPPING" ? "warning" : "danger"
                       }>
                         {psychologyData.compliance.status}
                       </Badge>
@@ -786,10 +812,12 @@ export function DashboardClient({
             </CardContent>
           </Card>
         )}
-      </div>
+      </motion.div>
 
       {/* Quick Actions */}
-      <QuickActions />
+      <motion.div variants={fadeInUp}>
+        <QuickActions />
+      </motion.div>
 
       {/* Chart */}
       {metrics.chartData.length > 0 && (
@@ -1099,6 +1127,6 @@ export function DashboardClient({
           workoutTitle={feedbackWorkout.title}
         />
       )}
-    </div>
+    </motion.div>
   );
 }

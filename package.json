@@ -72,6 +72,7 @@
     "@sentry/nextjs": "^10.38.0",
     "@vercel/blob": "^2.2.0",
     "bcryptjs": "^2.4.3",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -95,6 +96,7 @@
   "devDependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
     "@types/bcryptjs": "^2.4.6",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
