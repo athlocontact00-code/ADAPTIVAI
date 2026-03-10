@@ -25,6 +25,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import {
   TrendingUp,
   Trophy,
@@ -267,7 +268,7 @@ export function ProgressClient({
       const result = type === "weekly"
         ? await generateWeeklyReportAction()
         : await generateMonthlyReportAction();
-      
+
       if (result.success) {
         toast.success(result.message || "Report generated!");
         router.refresh();
@@ -341,7 +342,12 @@ export function ProgressClient({
   return (
     <div className="page-container space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <motion.div
+        className="flex items-center justify-between"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <TrendingUp className="h-5 w-5 text-primary" />
@@ -353,7 +359,7 @@ export function ProgressClient({
             </p>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* KPI Top Row — live metrics */}
       {!summary ? (
@@ -367,7 +373,12 @@ export function ProgressClient({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-4">
+        <motion.div
+          className="grid gap-4 md:grid-cols-4"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+        >
           <MetricCard
             title="Fitness (CTL)"
             value={summary.ctl != null && Number.isFinite(summary.ctl) ? Math.round(summary.ctl) : "—"}
@@ -464,7 +475,7 @@ export function ProgressClient({
               </CardContent>
             </Card>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Trends: placed between KPI and story for natural data → insight flow */}
@@ -488,11 +499,11 @@ export function ProgressClient({
               )}
               {weeklyStoryExpanded && (
                 <>
-              {narratives.weekly.quote && (
-                <div className="text-muted-foreground italic">“{narratives.weekly.quote}”</div>
-              )}
-              <div className="text-muted-foreground">{narratives.weekly.recommendation}</div>
-              <Collapsible>
+                  {narratives.weekly.quote && (
+                    <div className="text-muted-foreground italic">“{narratives.weekly.quote}”</div>
+                  )}
+                  <div className="text-muted-foreground">{narratives.weekly.recommendation}</div>
+                  <Collapsible>
                     <CollapsibleTrigger asChild>
                       <button type="button" className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1 hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary rounded" aria-expanded="false">
                         Based on <ChevronDown className="h-3 w-3" />
@@ -520,10 +531,9 @@ export function ProgressClient({
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="outline" className={`h-5 px-2 text-[10px] ${
-                            narratives.weekly.confidence === "HIGH" ? "border-emerald-500/50 text-emerald-500" :
-                            narratives.weekly.confidence === "MED" ? "border-amber-500/50 text-amber-500" : "border-muted-foreground/50"
-                          }`}>
+                          <Badge variant="outline" className={`h-5 px-2 text-[10px] ${narratives.weekly.confidence === "HIGH" ? "border-emerald-500/50 text-emerald-500" :
+                              narratives.weekly.confidence === "MED" ? "border-amber-500/50 text-amber-500" : "border-muted-foreground/50"
+                            }`}>
                             {narratives.weekly.confidence} confidence
                           </Badge>
                         </TooltipTrigger>
@@ -564,13 +574,13 @@ export function ProgressClient({
               )}
               {monthlyStoryExpanded && (
                 <>
-              {narratives.monthly.quote && (
-                <div className="text-muted-foreground italic">“{narratives.monthly.quote}”</div>
-              )}
-              {narratives.monthly.watchOut && (
-                <div className="text-muted-foreground">{narratives.monthly.watchOut}</div>
-              )}
-              <Collapsible>
+                  {narratives.monthly.quote && (
+                    <div className="text-muted-foreground italic">“{narratives.monthly.quote}”</div>
+                  )}
+                  {narratives.monthly.watchOut && (
+                    <div className="text-muted-foreground">{narratives.monthly.watchOut}</div>
+                  )}
+                  <Collapsible>
                     <CollapsibleTrigger asChild>
                       <button type="button" className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1 hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary rounded" aria-expanded="false">
                         Based on <ChevronDown className="h-3 w-3" />
@@ -598,10 +608,9 @@ export function ProgressClient({
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="outline" className={`h-5 px-2 text-[10px] ${
-                            narratives.monthly.confidence === "HIGH" ? "border-emerald-500/50 text-emerald-500" :
-                            narratives.monthly.confidence === "MED" ? "border-amber-500/50 text-amber-500" : "border-muted-foreground/50"
-                          }`}>
+                          <Badge variant="outline" className={`h-5 px-2 text-[10px] ${narratives.monthly.confidence === "HIGH" ? "border-emerald-500/50 text-emerald-500" :
+                              narratives.monthly.confidence === "MED" ? "border-amber-500/50 text-amber-500" : "border-muted-foreground/50"
+                            }`}>
                             {narratives.monthly.confidence} confidence
                           </Badge>
                         </TooltipTrigger>
@@ -659,11 +668,10 @@ export function ProgressClient({
                         key={r}
                         type="button"
                         onClick={() => setTimelineRange(r)}
-                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                          timelineRange === r
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${timelineRange === r
                             ? "bg-primary text-primary-foreground"
                             : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
-                        }`}
+                          }`}
                       >
                         {r === "season" ? "Season" : `${r}d`}
                       </button>
@@ -748,9 +756,8 @@ export function ProgressClient({
                             key={event.id}
                             type="button"
                             onClick={() => setSelectedTimelineEvent(isSelected ? null : event)}
-                            className={`w-full flex gap-4 items-start relative text-left rounded-lg p-2 -m-2 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
-                              isSelected ? "bg-muted/50" : "hover:bg-muted/30"
-                            }`}
+                            className={`w-full flex gap-4 items-start relative text-left rounded-lg p-2 -m-2 transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${isSelected ? "bg-muted/50" : "hover:bg-muted/30"
+                              }`}
                             aria-pressed={isSelected}
                             aria-label={`View details for ${event.title}`}
                           >
@@ -849,44 +856,44 @@ export function ProgressClient({
               </CardContent>
             </Card>
           ) : (
-          <div className="space-y-4">
-            {Object.entries(pbsBySport).map(([sport, pbs]) => (
-              <Card key={sport} className="border-border/50 overflow-hidden">
-                <CardHeader className="py-3">
-                  <CardTitle className={`flex items-center gap-2 text-base ${getSportColor(sport as PBSport)}`}>
-                    <Activity className="h-4 w-4" />
-                    {sport}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="py-2">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50">
-                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Discipline</th>
-                          <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Value</th>
-                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Date</th>
-                          <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Source</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pbs.map((pb) => (
-                          <tr key={pb.id} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
-                            <td className="py-2.5 px-3 font-medium">{pb.discipline}</td>
-                            <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{formatPBValue(pb.valueNumber, pb.valueUnit, pb.discipline)}</td>
-                            <td className="py-2.5 px-3 text-muted-foreground">
-                              {new Date(pb.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                            </td>
-                            <td className="py-2.5 px-3 text-muted-foreground text-xs">{pb.source}</td>
+            <div className="space-y-4">
+              {Object.entries(pbsBySport).map(([sport, pbs]) => (
+                <Card key={sport} className="border-border/50 overflow-hidden">
+                  <CardHeader className="py-3">
+                    <CardTitle className={`flex items-center gap-2 text-base ${getSportColor(sport as PBSport)}`}>
+                      <Activity className="h-4 w-4" />
+                      {sport}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="py-2">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border/50">
+                            <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Discipline</th>
+                            <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Value</th>
+                            <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Date</th>
+                            <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Source</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                        </thead>
+                        <tbody>
+                          {pbs.map((pb) => (
+                            <tr key={pb.id} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="py-2.5 px-3 font-medium">{pb.discipline}</td>
+                              <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{formatPBValue(pb.valueNumber, pb.valueUnit, pb.discipline)}</td>
+                              <td className="py-2.5 px-3 text-muted-foreground">
+                                {new Date(pb.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </td>
+                              <td className="py-2.5 px-3 text-muted-foreground text-xs">{pb.source}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </TabsContent>
 

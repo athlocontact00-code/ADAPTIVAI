@@ -4,6 +4,7 @@ import { useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DiaryEntry, Workout } from "@prisma/client";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -39,10 +40,10 @@ const VISIBILITY_OPTIONS: Array<{
   icon: typeof Eye;
   description: string;
 }> = [
-  { value: "HIDDEN", label: "Ukryte", icon: EyeOff, description: "AI nie widzi nic z tego dnia." },
-  { value: "METRICS_ONLY", label: "Tylko sygnały", icon: Lock, description: "AI widzi tylko sygnały i trendy — bez opisu." },
-  { value: "FULL_AI_ACCESS", label: "Sens dla AI", icon: Eye, description: "AI widzi sens i temat wpisu — nigdy dosłowne zdania." },
-];
+    { value: "HIDDEN", label: "Ukryte", icon: EyeOff, description: "AI nie widzi nic z tego dnia." },
+    { value: "METRICS_ONLY", label: "Tylko sygnały", icon: Lock, description: "AI widzi tylko sygnały i trendy — bez opisu." },
+    { value: "FULL_AI_ACCESS", label: "Sens dla AI", icon: Eye, description: "AI widzi sens i temat wpisu — nigdy dosłowne zdania." },
+  ];
 
 // Premium day card color based on mood (0-100)
 function getDayCardStyle(mood: number | null): string {
@@ -244,7 +245,12 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <motion.div
+        className="flex items-center justify-between mb-8"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <div>
           <h1 className="text-2xl font-light tracking-wide">Diary</h1>
           <p className="text-sm text-muted-foreground/70 mt-1">Twój miesięczny pamiętnik</p>
@@ -258,10 +264,15 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Month Grid - Premium Day Cards */}
-      <div className="space-y-3">
+      <motion.div
+        className="space-y-3"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.15 }}
+      >
         <div className="grid grid-cols-7 gap-1 text-xs text-muted-foreground/60 mb-2">
           {["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Ndz"].map((d) => (
             <div key={d} className="text-center py-1">{d}</div>
@@ -269,7 +280,7 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
         </div>
 
         <div className="grid grid-cols-7 gap-2">
-          {monthGrid.days.map((day) => {
+          {monthGrid.days.map((day, idx) => {
             const inMonth = day.getMonth() === currentMonthStart.getMonth();
             const isToday = isSameDay(day, new Date());
             const key = localDayKey(day);
@@ -278,13 +289,17 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
             const hasNotes = !!entry?.notes;
 
             return (
-              <button
+              <motion.button
                 key={key}
                 type="button"
                 onClick={() => openDay(day)}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: idx * 0.01 }}
+                whileHover={{ scale: 1.05 }}
                 className={cn(
                   "relative min-h-[80px] rounded-xl border p-2.5 text-left transition-all duration-200",
-                  "hover:scale-[1.02] hover:shadow-lg hover:border-primary/30",
+                  "hover:shadow-lg hover:border-primary/30",
                   getDayCardStyle(mood),
                   !inMonth && "opacity-40",
                   isToday && "ring-1 ring-primary/50",
@@ -314,20 +329,25 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
                     </div>
                   )}
                 </div>
-              </button>
+              </motion.button>
             );
           })}
         </div>
-      </div>
+      </motion.div>
 
       {/* Month Summary */}
       {monthSummary && (
-        <div className="mt-10 pt-8 border-t border-border/30">
+        <motion.div
+          className="mt-10 pt-8 border-t border-border/30"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
           <h2 className="text-xs uppercase tracking-widest text-muted-foreground/50 mb-3">Historia miesiąca</h2>
           <p className="text-sm text-muted-foreground/80 leading-relaxed max-w-xl">
             {monthSummary}
           </p>
-        </div>
+        </motion.div>
       )}
 
       {/* Day View Overlay */}
@@ -375,73 +395,73 @@ export function DiaryClient({ initialEntries, workouts, monthStart }: DiaryClien
               <div className="space-y-5">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sygnały dnia</p>
                 <div className="space-y-5 pl-1">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-foreground/90">
-                      <Moon className="h-4 w-4 text-muted-foreground" />
-                      <span>Jakość snu</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-foreground/90">
+                        <Moon className="h-4 w-4 text-muted-foreground" />
+                        <span>Jakość snu</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.sleepQuality, 50)}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.sleepQuality, 50)}</span>
+                    <Slider
+                      value={[formData.sleepQuality]}
+                      onValueChange={([v]) => setFormData({ ...formData, sleepQuality: v })}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[formData.sleepQuality]}
-                    onValueChange={([v]) => setFormData({ ...formData, sleepQuality: v })}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-foreground/90">
-                      <Heart className="h-4 w-4 text-muted-foreground" />
-                      <span>Samopoczucie</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-foreground/90">
+                        <Heart className="h-4 w-4 text-muted-foreground" />
+                        <span>Samopoczucie</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.mood, 50)}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.mood, 50)}</span>
+                    <Slider
+                      value={[formData.mood]}
+                      onValueChange={([v]) => setFormData({ ...formData, mood: v })}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[formData.mood]}
-                    onValueChange={([v]) => setFormData({ ...formData, mood: v })}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-foreground/90">
-                      <Zap className="h-4 w-4 text-muted-foreground" />
-                      <span>Motywacja</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-foreground/90">
+                        <Zap className="h-4 w-4 text-muted-foreground" />
+                        <span>Motywacja</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.motivation, 50)}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.motivation, 50)}</span>
+                    <Slider
+                      value={[formData.motivation]}
+                      onValueChange={([v]) => setFormData({ ...formData, motivation: v })}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[formData.motivation]}
-                    onValueChange={([v]) => setFormData({ ...formData, motivation: v })}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-foreground/90">
-                      <Zap className="h-4 w-4 rotate-180 text-muted-foreground" />
-                      <span>Zmęczenie</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-foreground/90">
+                        <Zap className="h-4 w-4 rotate-180 text-muted-foreground" />
+                        <span>Zmęczenie</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.fatigue, 50)}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/60">{getTrendArrow(formData.fatigue, 50)}</span>
+                    <Slider
+                      value={[formData.fatigue]}
+                      onValueChange={([v]) => setFormData({ ...formData, fatigue: v })}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                    />
                   </div>
-                  <Slider
-                    value={[formData.fatigue]}
-                    onValueChange={([v]) => setFormData({ ...formData, fatigue: v })}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
                 </div>
               </div>
 

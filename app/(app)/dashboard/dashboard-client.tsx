@@ -61,6 +61,10 @@ import {
   type DashboardRetentionSummary,
 } from "@/lib/actions/dashboard-retention";
 import { motion, Variants } from "framer-motion";
+import { TrainingLoadBanner } from "@/components/training-load-banner";
+import { MotivationalStreak } from "@/components/motivational-streak";
+import { MotivationalQuoteCard } from "@/components/motivational-quote-card";
+import { ActivityFeed } from "@/components/activity-feed";
 
 const staggerContainer: Variants = {
   hidden: { opacity: 0 },
@@ -467,16 +471,16 @@ export function DashboardClient({
         </motion.div>
       )}
 
+      {/* Training Load Status */}
+      <motion.div variants={fadeInUp}>
+        <TrainingLoadBanner tsb={metrics.tsb} readiness={metrics.readiness} />
+      </motion.div>
+
       {/* Streaks */}
       {streaks && (
         <motion.div variants={fadeInUp} className="grid gap-4 md:grid-cols-2">
-          <KPICard
-            title="Check-in streak"
-            value={`${streaks.checkInDayStreak}d`}
-            subtitle="Days in a row"
-            icon={<Flame className="h-4 w-4" />}
-            iconColor="text-orange-500"
-            tooltip="Counts consecutive days with a completed daily check-in."
+          <MotivationalStreak
+            currentStreak={streaks.checkInDayStreak}
           />
           <KPICard
             title="Workout streak"
@@ -581,26 +585,7 @@ export function DashboardClient({
 
       {/* Quote of the Day */}
       <motion.div variants={fadeInUp}>
-        <Card className="bg-gradient-to-r from-primary/5 via-transparent to-transparent border-primary/10">
-          <CardContent className="py-5 px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <blockquote className="text-lg font-medium text-foreground/90 leading-relaxed">
-                  &ldquo;{quote.text}&rdquo;
-                </blockquote>
-                <div className="mt-3 flex items-center gap-3">
-                  <p className="text-sm text-muted-foreground">— {quote.author}</p>
-                  <Badge
-                    variant="outline"
-                    className={`text-xs ${quote.categoryDisplay.color}`}
-                  >
-                    {quote.categoryDisplay.label}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <MotivationalQuoteCard quote={quote} />
       </motion.div>
 
       {/* Daily Insight */}
@@ -764,7 +749,7 @@ export function DashboardClient({
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Consistency</CardTitle>
                     <Target className={`h-4 w-4 ${psychologyData.compliance.status === "STRONG" ? "text-green-500" :
-                        psychologyData.compliance.status === "SLIPPING" ? "text-yellow-500" : "text-red-500"
+                      psychologyData.compliance.status === "SLIPPING" ? "text-yellow-500" : "text-red-500"
                       }`} />
                   </CardHeader>
                   <CardContent>
@@ -935,51 +920,18 @@ export function DashboardClient({
         </Card>
 
         {/* Recent Workouts */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Your completed workouts</CardDescription>
-            </div>
-            <Link href="/calendar">
-              <Button variant="ghost" size="sm">
-                View All
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent>
-            {recentWorkouts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No completed workouts yet.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {recentWorkouts.map((workout) => (
-                  <div
-                    key={workout.id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/10">
-                      <Zap className="h-4 w-4 text-green-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{workout.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(workout.date)} • {workout.type}
-                      </p>
-                    </div>
-                    {workout.tss && (
-                      <span className="text-sm text-muted-foreground">
-                        TSS {workout.tss}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Recent Activity — Strava-style */}
+        <ActivityFeed
+          workouts={recentWorkouts.map(w => ({
+            id: w.id,
+            title: w.title,
+            type: w.type ?? "Run",
+            date: typeof w.date === "string" ? w.date : w.date.toISOString(),
+            durationMin: w.durationMin,
+            tss: w.tss,
+            completed: w.completed,
+          }))}
+        />
       </div>
 
       {/* Risk Assessment Card */}
